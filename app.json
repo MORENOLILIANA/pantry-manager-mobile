@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Pantry Manager Mobile",
+    "slug": "pantry-manager-mobile",
+    "scheme": "pantrymanager",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "platforms": ["ios", "android", "web"],
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {},
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

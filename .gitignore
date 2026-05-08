@@ -1,0 +1,11 @@
+node_modules/
+.expo/
+.expo-shared/
+.turbo/
+dist/
+coverage/
+android/
+ios/
+*.log
+.env
+.env.*
