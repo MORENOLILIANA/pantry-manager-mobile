@@ -1,12 +1,17 @@
 import { StyleSheet, View, Text, ScrollView, SafeAreaView, Pressable } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import type { CompositeNavigationProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, borderRadius, typography, shadows } from "@/config/theme";
-import type { DashboardStackParamList } from "@/navigation/stacks/AppStack";
+import type { DashboardStackParamList, AppStackParamList } from "@/navigation/stacks/AppStack";
 import { StatCard } from "@/components/StatCard";
 
-type Navigation = NativeStackNavigationProp<DashboardStackParamList>;
+type Navigation = CompositeNavigationProp<
+  NativeStackNavigationProp<DashboardStackParamList>,
+  BottomTabNavigationProp<AppStackParamList>
+>;
 
 export function DashboardScreen() {
   const navigation = useNavigation<Navigation>();
@@ -34,7 +39,7 @@ export function DashboardScreen() {
             <Text style={styles.alertTitle}>3 productos próximos a caducar</Text>
             <Text style={styles.alertSubtitle}>En los próximos 7 días</Text>
           </View>
-          <Pressable>
+          <Pressable onPress={() => navigation.navigate("PantriesStack", { screen: "Pantries" })}>
             <Text style={styles.alertButton}>Ver</Text>
           </Pressable>
         </View>
@@ -63,19 +68,31 @@ export function DashboardScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Accesos rápidos</Text>
           <View style={styles.quickAccessGrid}>
-            <Pressable style={[styles.quickAccessButton, shadows.sm]}>
+            <Pressable 
+              onPress={() => navigation.navigate("PantriesStack", { screen: "Products" })}
+              style={[styles.quickAccessButton, shadows.sm]}
+            >
               <MaterialCommunityIcons name="plus-circle" size={32} color={colors.primary} />
               <Text style={styles.quickAccessLabel}>Añadir producto</Text>
             </Pressable>
-            <Pressable style={[styles.quickAccessButton, shadows.sm]}>
+            <Pressable 
+              onPress={() => navigation.navigate("PantriesStack", { screen: "BarcodeScan" })}
+              style={[styles.quickAccessButton, shadows.sm]}
+            >
               <MaterialCommunityIcons name="barcode" size={32} color={colors.primary} />
               <Text style={styles.quickAccessLabel}>Escanear</Text>
             </Pressable>
-            <Pressable onPress={() => navigation.navigate("Recipes")} style={[styles.quickAccessButton, shadows.sm]}>
+            <Pressable 
+              onPress={() => navigation.navigate("Recipes")}
+              style={[styles.quickAccessButton, shadows.sm]}
+            >
               <MaterialCommunityIcons name="chef-hat" size={32} color={colors.primary} />
               <Text style={styles.quickAccessLabel}>Recetas</Text>
             </Pressable>
-            <Pressable style={[styles.quickAccessButton, shadows.sm]}>
+            <Pressable 
+              onPress={() => navigation.navigate("ShoppingListStack", { screen: "ShoppingLists" })}
+              style={[styles.quickAccessButton, shadows.sm]}
+            >
               <MaterialCommunityIcons name="list-box" size={32} color={colors.primary} />
               <Text style={styles.quickAccessLabel}>Mi lista</Text>
             </Pressable>

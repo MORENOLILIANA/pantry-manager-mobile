@@ -59,6 +59,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function signIn(email: string, password: string) {
+    // DEMO LOGIN - Para testing sin API (remover después)
+    if (email === "demo@test.com" && password === "demo") {
+      const demoUser: AuthUser = {
+        id: 999,
+        name: "Demo User",
+        email: "demo@test.com",
+        role: "user",
+        is_admin: false
+      };
+      await persistSession("demo_token_12345", demoUser);
+      return;
+    }
+    
     const response = await apiLogin({ email, password });
     const nextToken = response.token ?? response.access_token;
 
@@ -70,19 +83,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function signUp(name: string, email: string, password: string, passwordConfirmation: string) {
-    const response = await apiRegister({
-      name,
-      email,
-      password,
-      password_confirmation: passwordConfirmation
-    });
-    const nextToken = response.token ?? response.access_token;
+    try {
+      const response = await apiRegister({
+        name,
+        email,
+        password,
+        password_confirmation: passwordConfirmation
+      });
+      console.log("📝 Respuesta del registro:", response);
+      
+      const nextToken = response.token ?? response.access_token;
 
-    if (!nextToken) {
-      throw new Error("La API no devolvió un token de acceso.");
+      if (!nextToken) {
+        console.error("❌ Token no encontrado en respuesta:", JSON.stringify(response, null, 2));
+        throw new Error("La API no devolvió un token de acceso. Respuesta: " + JSON.stringify(response));
+      }
+
+      await persistSession(nextToken, response.user);
+    } catch (error) {
+      console.error("⚠️ Error en signUp:", error);
+      throw error;
     }
-
-    await persistSession(nextToken, response.user);
   }
 
   async function signOut() {

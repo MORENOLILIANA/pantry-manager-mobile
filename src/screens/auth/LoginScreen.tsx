@@ -120,6 +120,16 @@ export function LoginScreen() {
               <Text style={styles.errorText}>{apiError}</Text>
             </View>
           )}
+
+          {/* Demo Credentials Box */}
+          <View style={styles.demoBox}>
+            <MaterialCommunityIcons name="information" size={16} color={colors.info} />
+            <View style={styles.demoContent}>
+              <Text style={styles.demoLabel}>Credenciales de demo:</Text>
+              <Text style={styles.demoValue}>Email: demo@test.com</Text>
+              <Text style={styles.demoValue}>Contraseña: demo</Text>
+            </View>
+          </View>
         </View>
 
         {/* Botón Iniciar Sesión */}
@@ -256,5 +266,30 @@ const styles = StyleSheet.create({
   registerTextBold: {
     fontWeight: "700",
     color: colors.primary,
+  },
+  demoBox: {
+    flexDirection: "row",
+    backgroundColor: colors.info + "15",
+    borderRadius: 8,
+    padding: spacing.md,
+    gap: spacing.sm,
+    alignItems: "flex-start",
+    marginTop: spacing.lg,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.info,
+  },
+  demoContent: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  demoLabel: {
+    ...typography.bodySm,
+    color: colors.info,
+    fontWeight: "700",
+  },
+  demoValue: {
+    ...typography.bodySm,
+    color: colors.info,
+    fontFamily: "monospace",
   },
 });
