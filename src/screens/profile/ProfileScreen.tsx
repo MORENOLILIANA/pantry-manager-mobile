@@ -402,24 +402,3 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  settingContent: {
-    flex: 1,
-    marginLeft: spacing.lg,
-  },
-  settingLabel: {
-    ...typography.body,
-    fontWeight: "600",
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  settingSubtitle: {
-    ...typography.bodySm,
-    color: colors.subtext,
-  },
-  logoutButton: {
-    marginTop: spacing.xxl,
-  },
-});

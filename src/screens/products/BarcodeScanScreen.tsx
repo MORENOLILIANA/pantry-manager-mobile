@@ -14,7 +14,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RouteProp } from "@react-navigation/native";
 import { Camera } from "expo-camera";
 import { BarCodeScanner, BarCodeEvent } from "expo-barcode-scanner";
-import * as Haptics from "expo-haptics";
+import { Vibration, Platform } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, borderRadius, typography } from "@/config/theme";
 import type { PantriesStackParamList } from "@/navigation/stacks/AppStack";
@@ -60,7 +60,12 @@ export function BarcodeScanScreen() {
     setLoading(true);
 
     try {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // simple vibration feedback; avoids expo-haptics web bundling issues
+      try {
+        if (Platform.OS !== "web") Vibration.vibrate(50);
+      } catch (e) {
+        /* ignore */
+      }
 
       // 1) Intentar obtener producto local
       try {
