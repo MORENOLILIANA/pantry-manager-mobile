@@ -26,24 +26,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   async function bootstrap() {
+    console.log("🔄 Bootstrap iniciado");
+    
     try {
       const storedToken = await getAuthToken();
+      console.log("📦 Token recuperado:", storedToken ? "SÍ" : "NO");
 
-      if (!storedToken) {
+      if (storedToken) {
+        setToken(storedToken);
+        setApiToken(storedToken);
+        console.log("✅ Token restaurado");
+      } else {
         setApiToken(null);
-        return;
+        console.log("❌ Sin token - mostrar login");
       }
-
-      setToken(storedToken);
-      setApiToken(storedToken);
-      const currentUser = await fetchCurrentUser();
-      setUser(currentUser);
-    } catch {
-      await clearAuthToken();
+    } catch (error) {
+      console.error("⚠️ Error en bootstrap:", error);
       setApiToken(null);
       setToken(null);
       setUser(null);
     } finally {
+      console.log("✨ Bootstrap completado");
       setIsBootstrapping(false);
     }
   }

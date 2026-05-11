@@ -1,3 +1,5 @@
+import { Platform } from "react-native";
+
 export const colors = {
   // Colores principales
   white: "#FFFFFF",
@@ -41,28 +43,45 @@ export const borderRadius = {
   full: 999,
 };
 
+// Helper para sombras que funcionen en web y mobile
+const createShadow = (web: string, elevation: number, mobile: { shadowColor: string; shadowOffset: { width: number; height: number }; shadowOpacity: number; shadowRadius: number }) => {
+  if (Platform.OS === "web") {
+    return { boxShadow: web } as any;
+  }
+  return { ...mobile, elevation } as any;
+};
+
 export const shadows = {
-  sm: {
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  md: {
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  lg: {
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6,
-  },
+  sm: createShadow(
+    "0 2px 4px rgba(0, 0, 0, 0.08)",
+    2,
+    {
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 4,
+    }
+  ),
+  md: createShadow(
+    "0 4px 8px rgba(0, 0, 0, 0.12)",
+    4,
+    {
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.12,
+      shadowRadius: 8,
+    }
+  ),
+  lg: createShadow(
+    "0 8px 12px rgba(0, 0, 0, 0.15)",
+    6,
+    {
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.15,
+      shadowRadius: 12,
+    }
+  ),
 };
 
 export const typography = {
