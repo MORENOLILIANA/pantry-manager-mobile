@@ -3,6 +3,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Platform, StyleSheet, View } from "react-native";
 import { colors, spacing } from "@/config/theme";
+import type { PantryItem } from "@/api/pantries";
 
 // Screens
 import { DashboardScreen } from "@/screens/home/DashboardScreen";
@@ -11,7 +12,9 @@ import { ShoppingListsScreen } from "@/screens/shopping-lists/ShoppingListsScree
 import { ProductsScreen } from "@/screens/products/ProductsScreen";
 import { BarcodeScanScreen } from "@/screens/products/BarcodeScanScreen";
 import { ProfileScreen } from "@/screens/profile/ProfileScreen";
+import { ChangePasswordScreen } from "@/screens/profile/ChangePasswordScreen";
 import { RecipesScreen } from "@/screens/recipes/RecipesScreen";
+import RecipeDetailScreen from "@/screens/recipes/RecipeDetailScreen";
 import { NotificationsScreen } from "@/screens/notifications/NotificationsScreen";
 
 export type AppStackParamList = {
@@ -25,13 +28,34 @@ export type AppStackParamList = {
 export type DashboardStackParamList = {
   Dashboard: undefined;
   Recipes: undefined;
+  RecipeDetail: { recipe: any };
   Notifications: undefined;
+  PantriesStack?: { screen: string };
+  ShoppingListStack?: { screen: string };
 };
 
 export type PantriesStackParamList = {
   Pantries: undefined;
-  Products: undefined;
-  BarcodeScan: undefined;
+  Products:
+    | {
+        pantryId: string;
+        mode: "add";
+        barcodeData?: {
+          barcode: string;
+          name: string;
+          brand?: string;
+          category?: string;
+        };
+      }
+    | {
+        pantryId: string;
+        mode: "edit";
+        itemId: string;
+        item: PantryItem;
+      };
+  BarcodeScan: {
+    pantryId: string;
+  };
 };
 
 export type ShoppingListStackParamList = {
@@ -40,6 +64,7 @@ export type ShoppingListStackParamList = {
 
 export type ProfileStackParamList = {
   Profile: undefined;
+  ChangePassword: undefined;
 };
 
 const Tab = createBottomTabNavigator<AppStackParamList>();
@@ -80,6 +105,11 @@ function DashboardStackNavigator() {
         name="Recipes"
         component={RecipesScreen}
         options={{ title: "Recetas" }}
+      />
+      <DashboardStack.Screen
+        name="RecipeDetail"
+        component={RecipeDetailScreen}
+        options={{ title: "Receta" }}
       />
       <DashboardStack.Screen
         name="Notifications"
@@ -146,6 +176,11 @@ function ProfileStackNavigator() {
         name="Profile"
         component={ProfileScreen}
         options={{ title: "Mi Perfil" }}
+      />
+      <ProfileStack.Screen
+        name="ChangePassword"
+        component={ChangePasswordScreen}
+        options={{ title: "Cambiar contraseña" }}
       />
     </ProfileStack.Navigator>
   );

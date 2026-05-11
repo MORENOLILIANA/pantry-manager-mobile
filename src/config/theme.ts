@@ -21,7 +21,7 @@ export const colors = {
   info: "#3498DB",
   
   // Neutros
-  border: "#E0E0E0",
+  border: "#E5E5E5",
   placeholder: "#BDC3C7",
   disabled: "#95A5A6",
 };

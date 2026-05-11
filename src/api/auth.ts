@@ -21,6 +21,19 @@ export async function fetchCurrentUser() {
 	return data;
 }
 
+export async function changePassword(payload: {
+	current_password: string;
+	new_password: string;
+	new_password_confirmation: string;
+}) {
+	await apiClient.put("/auth/change-password", payload);
+}
+
+export async function updateProfile(payload: { name: string }) {
+	const { data } = await apiClient.put<AuthUser>("/auth/profile", payload);
+	return data;
+}
+
 export async function logout() {
 	await apiClient.post("/auth/logout");
 }
