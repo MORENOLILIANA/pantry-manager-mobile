@@ -57,7 +57,7 @@ export function ProductsScreen() {
   const navigation = useNavigation<Navigation>();
   const route = useRoute<Route>();
 
-  const params = route.params as any;
+  const params = (route.params as any) || {};
   const { pantryId, mode = "add", item, itemId, barcodeData } = params;
 
   const { control, handleSubmit, watch, setValue } = useForm<FormData>({

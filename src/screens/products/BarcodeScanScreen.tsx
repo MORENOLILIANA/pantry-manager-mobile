@@ -34,7 +34,7 @@ export function BarcodeScanScreen() {
   const navigation = useNavigation<Navigation>();
   const route = useRoute<Route>();
 
-  const { pantryId } = route.params;
+  const { pantryId } = (route.params as any) || {};
 
   const [permission, requestPermission] = Camera.useCameraPermissions();
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
