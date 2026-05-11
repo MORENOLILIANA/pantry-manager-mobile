@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View, SafeAreaView, Pressable } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "@/context/AuthContext";
-import { ScreenShell } from "@/components/ScreenShell";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { InputField } from "@/components/InputField";
 import type { AuthStackParamList } from "@/navigation/stacks/AuthStack";
+import { colors, spacing, typography } from "@/config/theme";
 
 type Navigation = NativeStackNavigationProp<AuthStackParamList>;
 
@@ -16,104 +18,243 @@ type FormValues = {
 };
 
 export function LoginScreen() {
-  const { control, handleSubmit } = useForm<FormValues>({
+  const { control, handleSubmit, formState: { errors } } = useForm<FormValues>({
     defaultValues: { email: "", password: "" }
   });
   const { signIn } = useAuth();
   const navigation = useNavigation<Navigation>();
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   async function onSubmit(values: FormValues) {
     try {
+      setApiError(null);
       setLoading(true);
       await signIn(values.email, values.password);
     } catch (error) {
-      Alert.alert("No se pudo iniciar sesión", error instanceof Error ? error.message : "Revisa tus credenciales.");
+      const message = error instanceof Error ? error.message : "Revisa tus credenciales.";
+      setApiError(message);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <ScreenShell title="Acceso" subtitle="Entra con tu cuenta para ver despensas, listas y productos.">
-      <Controller
-        control={control}
-        name="email"
-        render={({ field: { onChange, onBlur, value } }) => (
-          <TextInput
-            placeholder="Correo electrónico"
-            placeholderTextColor="#64748b"
-            autoCapitalize="none"
-            keyboardType="email-address"
-            style={styles.input}
-            onBlur={onBlur}
-            onChangeText={onChange}
-            value={value}
+    <SafeAreaView style={styles.container}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Logo */}
+        <View style={styles.logoSection}>
+          <MaterialCommunityIcons name="leaf" size={48} color={colors.primary} />
+          <Text style={styles.logoText}>NutriCasa</Text>
+        </View>
+
+        {/* Subtítulo */}
+        <View style={styles.subtitleSection}>
+          <Text style={styles.subtitle}>Bienvenido de nuevo</Text>
+        </View>
+
+        {/* Campos */}
+        <View style={styles.formSection}>
+          <Controller
+            control={control}
+            name="email"
+            rules={{
+              required: "El email es requerido",
+              pattern: {
+                value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                message: "Email inválido"
+              }
+            }}
+            render={({ field: { onChange, onBlur, value } }) => (
+              <InputField
+                label="Email"
+                placeholder="tu@email.com"
+                icon="email"
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                keyboardType="email-address"
+                error={errors.email?.message}
+                style={styles.input}
+              />
+            )}
           />
-        )}
-      />
-      <Controller
-        control={control}
-        name="password"
-        render={({ field: { onChange, onBlur, value } }) => (
-          <TextInput
-            placeholder="Contraseña"
-            placeholderTextColor="#64748b"
-            secureTextEntry
-            style={styles.input}
-            onBlur={onBlur}
-            onChangeText={onChange}
-            value={value}
+
+          <Controller
+            control={control}
+            name="password"
+            rules={{ required: "La contraseña es requerida" }}
+            render={({ field: { onChange, onBlur, value } }) => (
+              <View>
+                <InputField
+                  label="Contraseña"
+                  placeholder="••••••••"
+                  icon="lock"
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  secureTextEntry={!showPassword}
+                  error={errors.password?.message}
+                  style={styles.input}
+                />
+                <Pressable 
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={styles.showPasswordButton}
+                >
+                  <Text style={styles.showPasswordText}>
+                    {showPassword ? "Ocultar" : "Mostrar"}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
           />
-        )}
-      />
-      <View style={styles.actionsRow}>
-        <Pressable onPress={() => navigation.navigate("ForgotPassword")} style={styles.linkButton}>
-          <Text style={styles.linkText}>Olvidé la contraseña</Text>
+
+          {/* Error del API */}
+          {apiError && (
+            <View style={styles.errorBox}>
+              <MaterialCommunityIcons name="alert-circle" size={18} color={colors.error} />
+              <Text style={styles.errorText}>{apiError}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Botón Iniciar Sesión */}
+        <PrimaryButton 
+          title={loading ? "Entrando..." : "Iniciar sesión"} 
+          onPress={handleSubmit(onSubmit)}
+          style={styles.submitButton}
+        />
+
+        {/* Link Olvidé Contraseña */}
+        <Pressable 
+          onPress={() => navigation.navigate("ForgotPassword")}
+          style={styles.forgotLink}
+        >
+          <Text style={styles.forgotText}>¿Olvidaste tu contraseña?</Text>
         </Pressable>
-        <Pressable onPress={() => navigation.navigate("Register")} style={styles.linkButton}>
-          <Text style={styles.linkText}>Crear cuenta</Text>
+
+        {/* Separador */}
+        <View style={styles.separator}>
+          <View style={styles.line} />
+          <Text style={styles.separatorText}>o</Text>
+          <View style={styles.line} />
+        </View>
+
+        {/* Link Crear Cuenta */}
+        <Pressable 
+          onPress={() => navigation.navigate("Register")}
+          style={styles.registerLink}
+        >
+          <Text style={styles.registerText}>
+            ¿No tienes cuenta? <Text style={styles.registerTextBold}>Crear cuenta</Text>
+          </Text>
         </Pressable>
-      </View>
-      <PrimaryButton title={loading ? "Entrando..." : "Iniciar sesión"} onPress={handleSubmit(onSubmit)} />
-      <Text style={styles.helper}>El token se guarda de forma segura para restaurar la sesión.</Text>
-    </ScreenShell>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  input: {
-    minHeight: 54,
-    borderRadius: 16,
-    backgroundColor: "#111827",
-    borderWidth: 1,
-    borderColor: "#243244",
-    paddingHorizontal: 16,
-    color: "#f9fafb"
-  },
-  actionsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12
-  },
-  linkButton: {
+  container: {
     flex: 1,
-    minHeight: 44,
+    backgroundColor: colors.white,
+  },
+  scrollContent: {
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xl,
+  },
+  logoSection: {
     alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#243244",
-    backgroundColor: "#0f172a"
+    marginBottom: spacing.xxl,
+    marginTop: spacing.lg,
   },
-  linkText: {
-    color: "#4ade80",
-    fontSize: 13,
-    fontWeight: "700"
+  logoText: {
+    ...typography.h2,
+    color: colors.primary,
+    fontWeight: "700",
+    marginTop: spacing.md,
   },
-  helper: {
-    color: "#94a3b8",
-    fontSize: 13,
-    lineHeight: 18
-  }
+  subtitleSection: {
+    alignItems: "center",
+    marginBottom: spacing.xxl,
+  },
+  subtitle: {
+    ...typography.body,
+    color: colors.subtext,
+  },
+  formSection: {
+    marginBottom: spacing.xxl,
+    gap: spacing.lg,
+  },
+  input: {
+    marginBottom: spacing.md,
+  },
+  showPasswordButton: {
+    position: "absolute",
+    right: spacing.md,
+    top: spacing.md + 10,
+    paddingHorizontal: spacing.sm,
+  },
+  showPasswordText: {
+    ...typography.bodySm,
+    color: colors.primary,
+    fontWeight: "600",
+  },
+  errorBox: {
+    flexDirection: "row",
+    backgroundColor: colors.errorLight,
+    borderRadius: 8,
+    padding: spacing.md,
+    gap: spacing.sm,
+    alignItems: "center",
+    marginTop: spacing.md,
+  },
+  errorText: {
+    ...typography.bodySm,
+    color: colors.error,
+    flex: 1,
+  },
+  submitButton: {
+    marginBottom: spacing.lg,
+  },
+  forgotLink: {
+    alignItems: "center",
+    paddingVertical: spacing.md,
+  },
+  forgotText: {
+    ...typography.bodySm,
+    color: colors.primary,
+    fontWeight: "600",
+  },
+  separator: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: spacing.xxl,
+    gap: spacing.md,
+  },
+  line: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  separatorText: {
+    ...typography.bodySm,
+    color: colors.subtext,
+  },
+  registerLink: {
+    alignItems: "center",
+    paddingVertical: spacing.md,
+  },
+  registerText: {
+    ...typography.bodySm,
+    color: colors.text,
+  },
+  registerTextBold: {
+    fontWeight: "700",
+    color: colors.primary,
+  },
 });

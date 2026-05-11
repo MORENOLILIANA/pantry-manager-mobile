@@ -1,45 +1,42 @@
-import { useEffect } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import type { AuthStackParamList } from "@/navigation/stacks/AuthStack";
-
-type Navigation = NativeStackNavigationProp<AuthStackParamList>;
+import { StyleSheet, View, Text, ActivityIndicator, SafeAreaView } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { colors, typography, spacing } from "@/config/theme";
 
 export function SplashScreen() {
-  const navigation = useNavigation<Navigation>();
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      navigation.replace("Login");
-    }, 450);
-
-    return () => clearTimeout(timer);
-  }, [navigation]);
-
   return (
-    <View style={styles.container}>
-      <Text style={styles.brand}>Pantry Manager</Text>
-      <Text style={styles.caption}>Preparando tu sesión...</Text>
-    </View>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.content}>
+        <View style={styles.logoContainer}>
+          <MaterialCommunityIcons name="leaf" size={60} color={colors.primary} />
+          <Text style={styles.logoText}>NutriCasa</Text>
+        </View>
+        <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0b1220",
+    backgroundColor: colors.white,
+  },
+  content: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 10
+    gap: 40,
   },
-  brand: {
-    color: "#f9fafb",
-    fontSize: 28,
-    fontWeight: "800"
+  logoContainer: {
+    alignItems: "center",
+    gap: spacing.md,
   },
-  caption: {
-    color: "#9ca3af",
-    fontSize: 15
-  }
+  logoText: {
+    ...typography.h1,
+    color: colors.primary,
+    fontWeight: "700",
+  },
+  loader: {
+    marginTop: 20,
+  },
 });

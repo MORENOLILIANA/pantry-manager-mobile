@@ -1,13 +1,22 @@
-import { ScreenShell } from "@/components/ScreenShell";
-import { SectionCard } from "@/components/SectionCard";
-import { FeatureItem } from "@/components/FeatureItem";
+import { SafeAreaView, StyleSheet } from "react-native";
+import { colors } from "@/config/theme";
+import { EmptyState } from "@/components/EmptyState";
 
 export function ProductsScreen() {
   return (
-    <ScreenShell title="Productos" subtitle="Buscador, detalle y resultados por código de barras.">
-      <SectionCard title="Búsqueda">
-        <FeatureItem title="Sin resultados" description="Conecta esta vista con /products/search y /products/barcode/{barcode}." />
-      </SectionCard>
-    </ScreenShell>
+    <SafeAreaView style={styles.container}>
+      <EmptyState
+        icon="package-plus"
+        title="Añadir producto"
+        subtitle="Rellena los detalles del producto"
+      />
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.white,
+  },
+});

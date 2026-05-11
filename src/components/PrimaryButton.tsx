@@ -1,9 +1,10 @@
 import { Pressable, StyleSheet, Text, ViewStyle } from "react-native";
+import { colors, spacing, borderRadius, typography } from "@/config/theme";
 
 type Props = {
   title: string;
   onPress: () => void;
-  variant?: "primary" | "secondary";
+  variant?: "primary" | "secondary" | "danger";
   style?: ViewStyle;
 };
 
@@ -13,12 +14,12 @@ export function PrimaryButton({ title, onPress, variant = "primary", style }: Pr
       onPress={onPress}
       style={({ pressed }) => [
         styles.base,
-        variant === "secondary" ? styles.secondary : styles.primary,
+        variant === "secondary" ? styles.secondary : variant === "danger" ? styles.danger : styles.primary,
         pressed && styles.pressed,
         style
       ]}
     >
-      <Text style={[styles.label, variant === "secondary" && styles.secondaryLabel]}>{title}</Text>
+      <Text style={[styles.label, variant === "secondary" && styles.secondaryLabel, variant === "danger" && styles.dangerLabel]}>{title}</Text>
     </Pressable>
   );
 }
@@ -26,29 +27,35 @@ export function PrimaryButton({ title, onPress, variant = "primary", style }: Pr
 const styles = StyleSheet.create({
   base: {
     minHeight: 52,
-    borderRadius: 16,
+    borderRadius: borderRadius.md,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 18
+    paddingHorizontal: spacing.lg
   },
   primary: {
-    backgroundColor: "#4ade80"
+    backgroundColor: colors.primary
   },
   secondary: {
     borderWidth: 1,
-    borderColor: "#334155",
-    backgroundColor: "#111827"
+    borderColor: colors.border,
+    backgroundColor: colors.secondary
+  },
+  danger: {
+    backgroundColor: colors.error
   },
   pressed: {
-    opacity: 0.82,
-    transform: [{ scale: 0.99 }]
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }]
   },
   label: {
-    color: "#052e16",
-    fontSize: 16,
+    ...typography.body,
+    color: colors.white,
     fontWeight: "700"
   },
   secondaryLabel: {
-    color: "#f9fafb"
+    color: colors.text
+  },
+  dangerLabel: {
+    color: colors.white
   }
 });

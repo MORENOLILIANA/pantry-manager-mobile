@@ -5,16 +5,17 @@ import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { RootNavigator } from "@/navigation/RootNavigator";
 import { ActivityIndicator, SafeAreaView, StyleSheet, View } from "react-native";
+import { colors } from "@/config/theme";
 
 const theme = {
   ...DefaultTheme,
   colors: {
     ...DefaultTheme.colors,
-    background: "#0b1220",
-    card: "#111827",
-    text: "#f9fafb",
-    border: "#243244",
-    primary: "#4ade80"
+    background: colors.white,
+    card: colors.secondary,
+    text: colors.text,
+    border: colors.border,
+    primary: colors.primary
   }
 };
 
@@ -25,7 +26,7 @@ function AppContent() {
     return (
       <SafeAreaView style={styles.bootContainer}>
         <View style={styles.bootCard}>
-          <ActivityIndicator color="#4ade80" />
+          <ActivityIndicator color={colors.primary} />
         </View>
       </SafeAreaView>
     );
@@ -38,7 +39,7 @@ export default function App() {
   return (
     <AuthProvider>
       <NavigationContainer theme={theme}>
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
         <AppContent />
       </NavigationContainer>
     </AuthProvider>
@@ -48,7 +49,7 @@ export default function App() {
 const styles = StyleSheet.create({
   bootContainer: {
     flex: 1,
-    backgroundColor: "#0b1220",
+    backgroundColor: colors.white,
     alignItems: "center",
     justifyContent: "center"
   },
@@ -58,6 +59,6 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#111827"
+    backgroundColor: colors.secondary
   }
 });

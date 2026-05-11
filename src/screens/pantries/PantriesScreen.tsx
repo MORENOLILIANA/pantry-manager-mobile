@@ -1,13 +1,24 @@
-import { ScreenShell } from "@/components/ScreenShell";
-import { SectionCard } from "@/components/SectionCard";
-import { FeatureItem } from "@/components/FeatureItem";
+import { SafeAreaView, StyleSheet } from "react-native";
+import { colors } from "@/config/theme";
+import { EmptyState } from "@/components/EmptyState";
 
 export function PantriesScreen() {
   return (
-    <ScreenShell title="Despensas" subtitle="Listado base para conectarse con GET /pantries.">
-      <SectionCard title="Estado inicial">
-        <FeatureItem title="Aún sin datos" description="Conecta esta pantalla al endpoint de despensas." />
-      </SectionCard>
-    </ScreenShell>
+    <SafeAreaView style={styles.container}>
+      <EmptyState
+        icon="package-variant"
+        title="Tu despensa está vacía"
+        subtitle="Añade tu primer producto para empezar"
+        buttonText="Añadir producto"
+        onButtonPress={() => {}}
+      />
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.white,
+  },
+});
