@@ -117,14 +117,16 @@ export function ChangePasswordScreen() {
                 onChangeText={onChange}
                 placeholder="Introduce tu contraseña"
                 secureTextEntry={!showCurrentPassword}
-                icon={
+                icon="lock"
+                rightIcon={
                   <Pressable
                     onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={showCurrentPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                   >
                     <MaterialCommunityIcons
-                      name={
-                        showCurrentPassword ? "eye" : "eye-off"
-                      }
+                      name={showCurrentPassword ? "eye" : "eye-off"}
                       size={20}
                       color={colors.subtext}
                     />
@@ -146,14 +148,16 @@ export function ChangePasswordScreen() {
                 onChangeText={onChange}
                 placeholder="Introduce tu nueva contraseña"
                 secureTextEntry={!showNewPassword}
-                icon={
+                icon="lock"
+                rightIcon={
                   <Pressable
                     onPress={() => setShowNewPassword(!showNewPassword)}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={showNewPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                   >
                     <MaterialCommunityIcons
-                      name={
-                        showNewPassword ? "eye" : "eye-off"
-                      }
+                      name={showNewPassword ? "eye" : "eye-off"}
                       size={20}
                       color={colors.subtext}
                     />
@@ -175,16 +179,18 @@ export function ChangePasswordScreen() {
                 onChangeText={onChange}
                 placeholder="Confirma tu nueva contraseña"
                 secureTextEntry={!showConfirmPassword}
-                icon={
+                icon="lock"
+                rightIcon={
                   <Pressable
                     onPress={() =>
                       setShowConfirmPassword(!showConfirmPassword)
                     }
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={showConfirmPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                   >
                     <MaterialCommunityIcons
-                      name={
-                        showConfirmPassword ? "eye" : "eye-off"
-                      }
+                      name={showConfirmPassword ? "eye" : "eye-off"}
                       size={20}
                       color={colors.subtext}
                     />

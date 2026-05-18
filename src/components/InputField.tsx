@@ -7,6 +7,7 @@ type Props = {
   label?: string;
   placeholder?: string;
   icon?: React.ReactNode | string;
+  rightIcon?: React.ReactNode | string;
   error?: string;
   value: string;
   onChangeText: (text: string) => void;
@@ -24,6 +25,7 @@ export function InputField({
   label,
   placeholder,
   icon,
+  rightIcon,
   error,
   value,
   onChangeText,
@@ -61,6 +63,11 @@ export function InputField({
           numberOfLines={numberOfLines}
           style={[styles.input, multiline && styles.inputMultiline]}
         />
+        {typeof rightIcon === "string" ? (
+          <MaterialCommunityIcons name={rightIcon as any} size={20} color={colors.subtext} style={styles.rightIcon} />
+        ) : (
+          rightIcon || null
+        )}
       </View>
       {error && <Text style={styles.errorText}>{error}</Text>}
     </View>
@@ -88,6 +95,9 @@ const styles = StyleSheet.create({
   },
   icon: {
     marginRight: spacing.sm,
+  },
+  rightIcon: {
+    marginLeft: spacing.sm,
   },
   input: {
     flex: 1,

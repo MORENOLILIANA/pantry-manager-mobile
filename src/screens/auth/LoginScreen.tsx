@@ -94,6 +94,20 @@ export function LoginScreen() {
                   label="Contraseña"
                   placeholder="••••••••"
                   icon="lock"
+                  rightIcon={
+                    <Pressable
+                      onPress={() => setShowPassword(!showPassword)}
+                      hitSlop={10}
+                      accessibilityRole="button"
+                      accessibilityLabel={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    >
+                      <MaterialCommunityIcons
+                        name={showPassword ? "eye" : "eye-off"}
+                        size={20}
+                        color={colors.subtext}
+                      />
+                    </Pressable>
+                  }
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
@@ -101,14 +115,6 @@ export function LoginScreen() {
                   error={errors.password?.message}
                   style={styles.input}
                 />
-                <Pressable 
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.showPasswordButton}
-                >
-                  <Text style={styles.showPasswordText}>
-                    {showPassword ? "Ocultar" : "Mostrar"}
-                  </Text>
-                </Pressable>
               </View>
             )}
           />
@@ -202,17 +208,6 @@ const styles = StyleSheet.create({
   },
   input: {
     marginBottom: spacing.md,
-  },
-  showPasswordButton: {
-    position: "absolute",
-    right: spacing.md,
-    top: spacing.md + 10,
-    paddingHorizontal: spacing.sm,
-  },
-  showPasswordText: {
-    ...typography.bodySm,
-    color: colors.primary,
-    fontWeight: "600",
   },
   errorBox: {
     flexDirection: "row",
