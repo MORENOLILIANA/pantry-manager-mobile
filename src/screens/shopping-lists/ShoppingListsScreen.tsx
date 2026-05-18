@@ -13,7 +13,7 @@ import {
   Platform,
   Keyboard,
 } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, borderRadius, typography, shadows } from "@/config/theme";
 import { EmptyState } from "@/components/EmptyState";
@@ -30,16 +30,20 @@ import {
   type ShoppingListItem,
 } from "@/api/shoppingLists";
 import { addItem as addItemToPantry, getPantries } from "@/api/pantries";
+import { getActiveGroup } from "@/services/groups";
 
 type SeparatorRow = { id: string; separator: true };
 type ShoppingListRow = ShoppingListItem | SeparatorRow;
 
 export function ShoppingListsScreen() {
+  const navigation = useNavigation<any>();
   const [list, setList] = useState<ShoppingList | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [addingItem, setAddingItem] = useState(false);
   const [newItemText, setNewItemText] = useState("");
+  const [activeGroupName, setActiveGroupName] = useState<string | null>(null);
+  const [isListShared, setIsListShared] = useState(false);
   const textInputRef = useRef<TextInput>(null);
 
   // Cargar lista de la compra
@@ -49,14 +53,18 @@ export function ShoppingListsScreen() {
 
       const lists = await getShoppingLists();
       const activeList = lists.find((l) => l.status === "active");
+      const activeGroup = await getActiveGroup();
+      setActiveGroupName(activeGroup?.name || null);
 
       if (activeList) {
         const fullList = await getShoppingList(activeList.id);
         setList({ ...fullList, items: fullList.items || [] });
+        setIsListShared(Boolean(activeGroup?.sharedShoppingListId && activeGroup.sharedShoppingListId === fullList.id));
       } else {
         // Crear una nueva lista si no existe activa
         const newList = await createShoppingList({ name: "Mi lista" });
         setList({ ...newList, items: newList.items || [] });
+        setIsListShared(false);
       }
     } catch (error) {
       console.error("Error loading shopping list:", error);
@@ -270,6 +278,7 @@ export function ShoppingListsScreen() {
   const pendingItems = list?.items.filter((i) => !i.purchased) || [];
   const purchasedItems = list?.items.filter((i) => i.purchased) || [];
   const separatorRow: SeparatorRow = { id: "separator", separator: true };
+  const openGroups = () => navigation.navigate("ProfileStack", { screen: "Groups" });
 
   if (loading) {
     return (
@@ -286,6 +295,26 @@ export function ShoppingListsScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Mi lista</Text>
+          <Pressable onPress={openGroups}>
+            <MaterialCommunityIcons name="account-group" size={24} color={colors.primary} />
+          </Pressable>
+        </View>
+
+        <View style={styles.shareCard}>
+          <MaterialCommunityIcons name="share-variant" size={22} color={colors.primary} />
+          <View style={styles.shareCardBody}>
+            <Text style={styles.shareCardTitle}>
+              {activeGroupName ? `Compartida con ${activeGroupName}` : "Sin grupo vinculado"}
+            </Text>
+            <Text style={styles.shareCardSubtitle}>
+              {activeGroupName
+                ? "Puedes vincular esta lista desde Grupos y compartidos."
+                : "Crea o únete a un grupo para compartir listas."}
+            </Text>
+          </View>
+          <Pressable onPress={openGroups}>
+            <Text style={styles.shareCardAction}>Abrir</Text>
+          </Pressable>
         </View>
 
         <View style={styles.emptyContainer}>
@@ -343,12 +372,36 @@ export function ShoppingListsScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Mi lista</Text>
-        <Pressable onPress={handleCompleteList}>
-          <MaterialCommunityIcons
-            name="check-circle-outline"
-            size={28}
-            color={colors.primary}
-          />
+        <View style={styles.headerActions}>
+          <Pressable onPress={openGroups}>
+            <MaterialCommunityIcons name="account-group" size={24} color={colors.primary} />
+          </Pressable>
+          <Pressable onPress={handleCompleteList}>
+            <MaterialCommunityIcons
+              name="check-circle-outline"
+              size={28}
+              color={colors.primary}
+            />
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={styles.shareCard}>
+        <MaterialCommunityIcons name="share-variant" size={22} color={colors.primary} />
+        <View style={styles.shareCardBody}>
+          <Text style={styles.shareCardTitle}>
+            {activeGroupName ? `Compartida con ${activeGroupName}` : "Sin grupo vinculado"}
+          </Text>
+          <Text style={styles.shareCardSubtitle}>
+            {isListShared
+              ? "Esta lista ya está vinculada al grupo activo."
+              : activeGroupName
+                ? "Vincula la lista actual desde Grupos y compartidos."
+                : "Crea o únete a un grupo para compartir listas."}
+          </Text>
+        </View>
+        <Pressable onPress={openGroups}>
+          <Text style={styles.shareCardAction}>Abrir</Text>
         </Pressable>
       </View>
 
@@ -517,10 +570,44 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   listContent: {
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
   itemContainer: {
+  shareCard: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.secondary,
+  },
+  shareCardBody: {
+    flex: 1,
+  },
+  shareCardTitle: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: "700",
+  },
+  shareCardSubtitle: {
+    ...typography.bodySm,
+    color: colors.subtext,
+    marginTop: spacing.xs,
+  },
+  shareCardAction: {
+    ...typography.bodySm,
+    color: colors.primary,
+    fontWeight: "700",
+  },
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: spacing.md,

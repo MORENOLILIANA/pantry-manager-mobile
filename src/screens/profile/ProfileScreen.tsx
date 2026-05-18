@@ -292,6 +292,28 @@ export function ProfileScreen() {
           </Pressable>
 
           <Pressable
+            onPress={() => navigation.navigate("Groups")}
+            style={[styles.settingItem, shadows.sm]}
+          >
+            <MaterialCommunityIcons
+              name="account-group"
+              size={24}
+              color={colors.primary}
+            />
+            <View style={styles.settingContent}>
+              <Text style={styles.settingLabel}>Grupos y compartidos</Text>
+              <Text style={styles.settingSubtitle}>
+                Crea hogares y comparte listas
+              </Text>
+            </View>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={24}
+              color={colors.subtext}
+            />
+          </Pressable>
+
+          <Pressable
             onPress={() => setAvatarModalVisible(true)}
             style={[styles.settingItem, shadows.sm]}
           >

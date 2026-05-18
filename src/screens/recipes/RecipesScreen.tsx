@@ -10,6 +10,7 @@ import {
   Pressable,
   Alert,
 } from "react-native";
+import { InputField } from "@/components/InputField";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, typography, borderRadius, shadows } from "@/config/theme";
 import { getPantries, getPantry } from "@/api/pantries";
@@ -17,6 +18,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { DashboardStackParamList } from "@/navigation/stacks/AppStack";
 import { EmptyState } from "@/components/EmptyState";
+import { getRecipeFavoriteIds, toggleRecipeFavoriteId } from "@/services/storage";
 
 type Navigation = NativeStackNavigationProp<DashboardStackParamList>;
 
@@ -40,6 +42,15 @@ export function RecipesScreen() {
   const [loading, setLoading] = useState(true);
   const [meals, setMeals] = useState<MealDetail[]>([]);
   const [availableProducts, setAvailableProducts] = useState<string[]>([]);
+  const [search, setSearch] = useState("");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    void (async () => {
+      setFavoriteIds(await getRecipeFavoriteIds());
+    })();
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -143,13 +154,76 @@ export function RecipesScreen() {
   const hasIngredient = (name: string) =>
     availableProducts.some((p) => p.includes(name.toLowerCase()));
 
+  const filteredMeals = meals.filter((meal) => {
+    const query = search.trim().toLowerCase();
+    const matchesSearch =
+      !query ||
+      meal.strMeal.toLowerCase().includes(query) ||
+      meal.ingredients.some((ingredient) => ingredient.toLowerCase().includes(query));
+    const matchesFavorite = !favoritesOnly || favoriteIds.includes(meal.idMeal);
+    return matchesSearch && matchesFavorite;
+  });
+
+  const handleToggleFavorite = async (recipeId: string) => {
+    try {
+      const next = await toggleRecipeFavoriteId(recipeId);
+      setFavoriteIds(next);
+    } catch (error) {
+      console.error("Error toggling recipe favorite:", error);
+      Alert.alert("Error", "No se pudo actualizar el favorito");
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        {meals.map((meal) => (
+        <View style={styles.toolbar}>
+          <InputField
+            placeholder="Buscar recetas o ingredientes"
+            icon="magnify"
+            value={search}
+            onChangeText={setSearch}
+            style={styles.searchInput}
+          />
+          <View style={styles.filterRow}>
+            <Pressable
+              onPress={() => setFavoritesOnly(false)}
+              style={[styles.filterChip, !favoritesOnly && styles.filterChipActive]}
+            >
+              <Text style={[styles.filterChipText, !favoritesOnly && styles.filterChipTextActive]}>
+                Todas
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setFavoritesOnly(true)}
+              style={[styles.filterChip, favoritesOnly && styles.filterChipActive]}
+            >
+              <Text style={[styles.filterChipText, favoritesOnly && styles.filterChipTextActive]}>
+                Favoritas
+              </Text>
+            </Pressable>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryText}>{filteredMeals.length} recetas</Text>
+            <Text style={styles.summarySubtext}>{favoriteIds.length} favoritas</Text>
+          </View>
+        </View>
+
+        {filteredMeals.map((meal) => (
           <View key={meal.idMeal} style={[styles.card, shadows.sm]}>
             <Image source={{ uri: meal.strMealThumb }} style={styles.thumb} />
             <View style={styles.cardBody}>
+              <Pressable
+                onPress={() => void handleToggleFavorite(meal.idMeal)}
+                hitSlop={10}
+                style={styles.favoriteButton}
+              >
+                <MaterialCommunityIcons
+                  name={favoriteIds.includes(meal.idMeal) ? "heart" : "heart-outline"}
+                  size={22}
+                  color={favoriteIds.includes(meal.idMeal) ? colors.error : colors.subtext}
+                />
+              </Pressable>
               <Text style={styles.mealTitle}>{meal.strMeal}</Text>
               {meal.strCategory ? (
                 <Text style={styles.category}>{meal.strCategory}</Text>
@@ -214,6 +288,16 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
   content: { padding: spacing.lg },
+  toolbar: { marginBottom: spacing.lg },
+  searchInput: { marginBottom: spacing.md },
+  filterRow: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.md },
+  filterChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 999, backgroundColor: colors.secondary },
+  filterChipActive: { backgroundColor: colors.primary },
+  filterChipText: { ...typography.bodySm, color: colors.text, fontWeight: "600" },
+  filterChipTextActive: { color: colors.white },
+  summaryRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  summaryText: { ...typography.bodySm, color: colors.text, fontWeight: "700" },
+  summarySubtext: { ...typography.bodySm, color: colors.subtext },
   card: {
     flexDirection: "row",
     backgroundColor: colors.white,
@@ -224,7 +308,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   thumb: { width: 120, height: 120 },
-  cardBody: { flex: 1, padding: spacing.md },
+  cardBody: { flex: 1, padding: spacing.md, position: "relative" },
+  favoriteButton: { position: "absolute", top: spacing.sm, right: spacing.sm, zIndex: 1 },
   mealTitle: { ...typography.h3, color: colors.text, marginBottom: spacing.xs },
   category: { ...typography.bodySm, color: colors.subtext, marginBottom: spacing.sm },
   ingredientsRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },

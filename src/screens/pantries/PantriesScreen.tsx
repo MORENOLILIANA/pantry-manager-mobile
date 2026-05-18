@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   StyleSheet,
   View,
@@ -29,6 +29,7 @@ import {
 type Navigation = NativeStackNavigationProp<PantriesStackParamList>;
 
 type LocationFilter = "all" | "refrigerator" | "freezer" | "pantry" | "other";
+type ExpiryFilter = "all" | "normal" | "proximo" | "caducado";
 
 const LOCATION_OPTIONS: { label: string; value: LocationFilter }[] = [
   { label: "Todos", value: "all" },
@@ -45,6 +46,13 @@ const LOCATION_DISPLAY: Record<string, string> = {
   other: "Otro",
 };
 
+const EXPIRY_OPTIONS: { label: string; value: ExpiryFilter }[] = [
+  { label: "Todos", value: "all" },
+  { label: "Normales", value: "normal" },
+  { label: "Próximos", value: "proximo" },
+  { label: "Caducados", value: "caducado" },
+];
+
 export function PantriesScreen() {
   const navigation = useNavigation<Navigation>();
 
@@ -55,8 +63,8 @@ export function PantriesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLocation, setSelectedLocation] = useState<LocationFilter>("all");
+  const [selectedExpiry, setSelectedExpiry] = useState<ExpiryFilter>("all");
 
-  // Cargar despensas e items
   const loadPantries = async () => {
     try {
       setLoading(true);
@@ -76,18 +84,30 @@ export function PantriesScreen() {
     }
   };
 
-  // Refrescar lista
   const handleRefresh = async () => {
     setRefreshing(true);
     await loadPantries();
     setRefreshing(false);
   };
 
-  // Aplicar filtros
+  const getDaysUntilExpiry = (expiryDate: string) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expiry = new Date(expiryDate);
+    expiry.setHours(0, 0, 0, 0);
+    return Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  };
+
+  const getExpiryStatus = (expiryDate: string) => {
+    const daysUntilExpiry = getDaysUntilExpiry(expiryDate);
+    if (daysUntilExpiry < 0) return "caducado";
+    if (daysUntilExpiry < 7) return "proximo";
+    return "normal";
+  };
+
   useEffect(() => {
     let filtered = allItems;
 
-    // Filtro por búsqueda
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter((item) =>
@@ -95,37 +115,44 @@ export function PantriesScreen() {
       );
     }
 
-    // Filtro por ubicación
     if (selectedLocation !== "all") {
       filtered = filtered.filter((item) => item.location === selectedLocation);
     }
 
-    setFilteredItems(filtered);
-  }, [allItems, searchQuery, selectedLocation]);
+    if (selectedExpiry !== "all") {
+      filtered = filtered.filter(
+        (item) => getExpiryStatus(item.expiry_date) === selectedExpiry
+      );
+    }
 
-  // Cargar al montar
+    filtered = [...filtered].sort(
+      (a, b) => getDaysUntilExpiry(a.expiry_date) - getDaysUntilExpiry(b.expiry_date)
+    );
+
+    setFilteredItems(filtered);
+  }, [allItems, searchQuery, selectedLocation, selectedExpiry]);
+
   useEffect(() => {
     loadPantries();
   }, []);
 
-  // Calcular estado de caducidad
-  const getExpiryStatus = (expiryDate: string) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const expiry = new Date(expiryDate);
-    expiry.setHours(0, 0, 0, 0);
-
-    const daysUntilExpiry = Math.ceil(
-      (expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+  const expirySummary = useMemo(() => {
+    return allItems.reduce(
+      (acc, item) => {
+        acc[getExpiryStatus(item.expiry_date)] += 1;
+        return acc;
+      },
+      { normal: 0, proximo: 0, caducado: 0 }
     );
+  }, [allItems]);
 
-    if (daysUntilExpiry < 0) return "caducado";
-    if (daysUntilExpiry < 7) return "proximo";
-    return "normal";
-  };
+  const closestExpiry = useMemo(() => {
+    if (!allItems.length) return null;
+    return [...allItems].sort(
+      (a, b) => getDaysUntilExpiry(a.expiry_date) - getDaysUntilExpiry(b.expiry_date)
+    )[0];
+  }, [allItems]);
 
-  // Eliminar item con confirmación
   const handleDeleteItem = (item: PantryItem) => {
     if (!pantry) return;
 
@@ -151,7 +178,6 @@ export function PantriesScreen() {
     );
   };
 
-  // Editar item
   const handleEditItem = (item: PantryItem) => {
     if (!pantry) return;
     navigation.navigate("Products", {
@@ -162,7 +188,6 @@ export function PantriesScreen() {
     });
   };
 
-  // Añadir item
   const handleAddItem = () => {
     if (!pantry) return;
     navigation.navigate("Products", {
@@ -242,6 +267,83 @@ export function PantriesScreen() {
           )}
         />
       </View>
+
+      {/* Filtros por caducidad */}
+      <View style={styles.filtersContainer}>
+        <FlatList
+          horizontal
+          data={EXPIRY_OPTIONS}
+          keyExtractor={(item) => item.value}
+          scrollEnabled={false}
+          renderItem={({ item }) => (
+            <Pressable
+              onPress={() => setSelectedExpiry(item.value)}
+              style={[
+                styles.filterChip,
+                selectedExpiry === item.value && styles.filterChipActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.filterChipText,
+                  selectedExpiry === item.value && styles.filterChipTextActive,
+                ]}
+              >
+                {item.label}
+              </Text>
+            </Pressable>
+          )}
+        />
+      </View>
+
+      {/* Resumen de caducidades */}
+      <View style={styles.expirySummary}>
+        <View style={[styles.summaryCard, shadows.sm]}>
+          <Text style={styles.summaryValue}>{expirySummary.normal}</Text>
+          <Text style={styles.summaryLabel}>Normales</Text>
+        </View>
+        <View style={[styles.summaryCard, shadows.sm]}>
+          <Text style={styles.summaryValue}>{expirySummary.proximo}</Text>
+          <Text style={styles.summaryLabel}>Próximos</Text>
+        </View>
+        <View style={[styles.summaryCard, shadows.sm]}>
+          <Text
+            style={[
+              styles.summaryValue,
+              expirySummary.caducado > 0 && styles.summaryValueDanger,
+            ]}
+          >
+            {expirySummary.caducado}
+          </Text>
+          <Text style={styles.summaryLabel}>Caducados</Text>
+        </View>
+      </View>
+
+      {/* Próximo a caducar */}
+      {closestExpiry ? (
+        <View style={styles.closestCard}>
+          <MaterialCommunityIcons
+            name={
+              getExpiryStatus(closestExpiry.expiry_date) === "caducado"
+                ? "alert-circle"
+                : "clock-alert"
+            }
+            size={22}
+            color={
+              getExpiryStatus(closestExpiry.expiry_date) === "caducado"
+                ? colors.error
+                : "#F39C12"
+            }
+          />
+          <View style={styles.closestText}>
+            <Text style={styles.closestTitle}>Más próximo a caducar</Text>
+            <Text style={styles.closestSubtitle}>
+              {closestExpiry.product.name} ·{" "}
+              {new Date(closestExpiry.expiry_date).toLocaleDateString("es-ES")}
+            </Text>
+          </View>
+        </View>
+      ) : null}
 
       {/* Lista de items */}
       {filteredItems.length === 0 ? (
@@ -360,6 +462,56 @@ const styles = StyleSheet.create({
   },
   filterChipTextActive: {
     color: colors.white,
+  },
+  expirySummary: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  summaryCard: {
+    flex: 1,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: spacing.md,
+    alignItems: "center",
+  },
+  summaryValue: {
+    ...typography.h2,
+    color: colors.text,
+  },
+  summaryValueDanger: {
+    color: colors.error,
+  },
+  summaryLabel: {
+    ...typography.bodySm,
+    color: colors.subtext,
+    marginTop: spacing.xs,
+  },
+  closestCard: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.secondary,
+  },
+  closestText: {
+    flex: 1,
+  },
+  closestTitle: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: "700",
+  },
+  closestSubtitle: {
+    ...typography.bodySm,
+    color: colors.subtext,
+    marginTop: spacing.xs,
   },
   emptyContainer: {
     flex: 1,

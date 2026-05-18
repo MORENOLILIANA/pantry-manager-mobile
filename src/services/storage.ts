@@ -3,6 +3,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const authTokenKey = "pantry-manager.auth-token";
 const userAvatarKey = "pantry-manager.user-avatar";
 const userAvatarPhotoKey = "pantry-manager.user-avatar-photo";
+const notificationReadsKey = "pantry-manager.notification-reads";
+const recipeFavoritesKey = "pantry-manager.recipe-favorites";
 
 export async function saveAuthToken(token: string) {
   await AsyncStorage.setItem(authTokenKey, token);
@@ -38,4 +40,64 @@ export async function getUserAvatarPhoto() {
 
 export async function clearUserAvatarPhoto() {
   await AsyncStorage.removeItem(userAvatarPhotoKey);
+}
+
+export async function getReadNotificationIds() {
+  const raw = await AsyncStorage.getItem(notificationReadsKey);
+  if (!raw) return [] as string[];
+
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((value) => typeof value === "string") : [];
+  } catch {
+    return [] as string[];
+  }
+}
+
+export async function saveReadNotificationIds(ids: string[]) {
+  await AsyncStorage.setItem(notificationReadsKey, JSON.stringify(Array.from(new Set(ids))));
+}
+
+export async function markNotificationAsRead(notificationId: string) {
+  const current = await getReadNotificationIds();
+  if (!current.includes(notificationId)) {
+    current.push(notificationId);
+    await saveReadNotificationIds(current);
+  }
+}
+
+export async function markNotificationsAsRead(notificationIds: string[]) {
+  const current = await getReadNotificationIds();
+  const next = Array.from(new Set([...current, ...notificationIds]));
+  await saveReadNotificationIds(next);
+}
+
+export async function clearReadNotifications() {
+  await AsyncStorage.removeItem(notificationReadsKey);
+}
+
+export async function getRecipeFavoriteIds() {
+  const raw = await AsyncStorage.getItem(recipeFavoritesKey);
+  if (!raw) return [] as string[];
+
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((value) => typeof value === "string") : [];
+  } catch {
+    return [] as string[];
+  }
+}
+
+export async function saveRecipeFavoriteIds(ids: string[]) {
+  await AsyncStorage.setItem(recipeFavoritesKey, JSON.stringify(Array.from(new Set(ids))));
+}
+
+export async function toggleRecipeFavoriteId(recipeId: string) {
+  const current = await getRecipeFavoriteIds();
+  const next = current.includes(recipeId)
+    ? current.filter((id) => id !== recipeId)
+    : [...current, recipeId];
+
+  await saveRecipeFavoriteIds(next);
+  return next;
 }

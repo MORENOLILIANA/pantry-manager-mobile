@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, borderRadius, typography } from "@/config/theme";
 
@@ -11,6 +11,7 @@ type Props = {
   description: string;
   timeAgo: string;
   read?: boolean;
+  onPress?: (id: string) => void;
 };
 
 const typeConfig: Record<NotificationType, { icon: string; color: string }> = {
@@ -28,18 +29,21 @@ const typeConfig: Record<NotificationType, { icon: string; color: string }> = {
   },
 };
 
-export function NotificationItem({ id, type, title, description, timeAgo, read = false }: Props) {
+export function NotificationItem({ id, type, title, description, timeAgo, read = false, onPress }: Props) {
   const config = typeConfig[type];
 
   return (
-    <View style={[styles.container, !read && styles.containerUnread]}>
+    <Pressable onPress={() => onPress?.(id)} style={[styles.container, !read && styles.containerUnread]}>
       <MaterialCommunityIcons name={config.icon as any} size={24} color={config.color} style={styles.icon} />
       <View style={styles.content}>
-        <Text style={styles.title}>{title}</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>{title}</Text>
+          {!read ? <View style={styles.unreadDot} /> : null}
+        </View>
         <Text style={styles.description}>{description}</Text>
         <Text style={styles.time}>{timeAgo}</Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -62,11 +66,23 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
   title: {
     ...typography.body,
     fontWeight: "700",
     color: colors.text,
-    marginBottom: spacing.xs,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
   },
   description: {
     ...typography.bodySm,

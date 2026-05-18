@@ -53,7 +53,7 @@ Facilitar la gestion domestica de la alimentacion mediante una herramienta movil
 - Base de datos y API: parcialmente cubiertas desde la app y el backend ya existentes.
 - UX/UI: bastante avanzado en la app, pero faltan pulidos para acercarse al prototipo final.
 - Backend: los flujos principales consumidos por la app estan integrados.
-- App movil: cubre auth, despensa, escaner, lista, perfil y recetas.
+- App movil: cubre auth, despensa, escaner, lista, perfil, recetas, notificaciones y grupos compartidos.
 - Testing: se ha validado TypeScript y se han corregido bugs importantes, pero faltan pruebas reales finales.
 - Despliegue y documentacion: documentacion en progreso y despliegue final pendiente.
 
@@ -68,14 +68,16 @@ Facilitar la gestion domestica de la alimentacion mediante una herramienta movil
 - Consulta nutricional -> implementada via backend.
 - Caducidades y alertas -> implementado parcialmente en UI y backend.
 - Recetas segun despensa -> implementado con TheMealDB.
-- Notificaciones push reales -> pendiente de integrar completamente.
-- Grupo / permisos / roles -> pendiente de cierre si el backend final no lo deja completo.
+- Notificaciones de despensa con estado leido/no leido -> implementado en UI con persistencia local.
+- Busqueda y favoritos de recetas -> implementado.
+- Grupos y compartición de listas -> implementado en frontend con persistencia local.
+- Vista de caducidades con resumen, próximo vencimiento y filtros -> implementado.
+- Grupo / permisos / roles backend -> pendiente de cierre si el backend final no lo deja completo.
 - Foto/avatares de perfil -> implementado localmente, pendiente de sincronizar con backend.
 - Build y distribucion final -> pendiente.
 
 ### Requisitos no cubiertos o a cerrar
 
-- Sistema de notificaciones push real con FCM y scheduler.
 - Sincronizacion remota de foto/avatar de perfil.
 - Confirmar soporte real de grupos, roles y permisos en backend.
 - Generacion final de APK y guia de distribucion estable.
@@ -109,7 +111,8 @@ Usa esta lista para comprobar si el proyecto cumple con lo que pide el documento
 - [x] Perfil y cambio de contraseña.
 - [ ] Notificaciones reales.
 - [ ] Sincronizacion de foto/avatar con backend.
-- [ ] Grupo / roles / permisos completos.
+- [x] Grupos y compartición de listas local.
+- [ ] Grupo / roles / permisos backend completos.
 
 ### Entrega academica
 
@@ -129,7 +132,8 @@ Usa esta lista para comprobar si el proyecto cumple con lo que pide el documento
 - [x] Control de caducidades en UI.
 - [ ] Alertas push reales.
 - [ ] Analitica o vista de gastos compartidos si se decide incluirla.
-- [ ] Confirmar alcance final de grupos y permisos.
+- [x] Confirmar alcance final de grupos y permisos locales.
+- [ ] Confirmar alcance final de grupos y permisos backend.
 
 ## Rubrica de evaluacion
 
@@ -237,9 +241,10 @@ Recomendación: Para desarrollo, usa la opción de VS Code (`tasks.json` + `laun
 
 ## Pendientes funcionales detectados
 
-- Notificaciones aun usan datos mock (`NotificationsScreen`).
+- Notificaciones ya cargan datos del backend de despensa, pero siguen sin ser push globales.
 - Sincronizar avatar/foto con backend (ahora se guarda local en AsyncStorage).
 - Mejorar validacion de estados de red y errores API en UI.
+- Falta seguir cerrando grupos compartidos y funciones sociales.
 
 ## Benchmark competitivo rapido
 
@@ -279,13 +284,11 @@ Referencias revisadas: Bring!, AnyList y SuperCook.
 ### Botones o acciones que aun faltarian para igualar mejor a la competencia
 
 - Compartir lista en tiempo real con otros usuarios.
-- Invitar miembros a una despensa o grupo.
 - Boton de anadir por voz.
 - Boton de ofertas / cupones / sugerencias comerciales.
 - Guardar recetas favoritas.
 - Planificador semanal de comidas.
 - Busqueda y filtros mas potentes en recetas y lista.
-- Centro de notificaciones real con marcar como leidas.
 - Historial de movimientos de despensa y compras.
 - Vista de caducidades como calendario o timeline.
 

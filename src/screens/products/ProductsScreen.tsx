@@ -84,6 +84,8 @@ export function ProductsScreen() {
   const selectedLocation = watch("location");
   const expiryDate = watch("expiryDate");
 
+  const toDate = (d: any) => (d instanceof Date ? d : d ? new Date(d) : new Date());
+
   // Pre-rellenar si viene de BarcodeScan
   useEffect(() => {
     if (barcodeData) {
@@ -100,7 +102,7 @@ export function ProductsScreen() {
   }, [barcodeData, setValue]);
 
   const openDatePicker = () => {
-    setTempDate(expiryDate || new Date());
+    setTempDate(toDate(expiryDate));
     setShowDatePicker(true);
   };
 
@@ -321,14 +323,14 @@ export function ProductsScreen() {
                 color={colors.primary}
               />
               <Text style={styles.dateButtonText}>
-                {expiryDate.toLocaleDateString("es-ES")}
+                {toDate(expiryDate).toLocaleDateString("es-ES")}
               </Text>
             </Pressable>
           </View>
 
           {showDatePicker && Platform.OS === "android" && (
             <DateTimePicker
-              value={expiryDate}
+              value={toDate(expiryDate)}
               mode="date"
               display="default"
               onChange={handleDateChange}

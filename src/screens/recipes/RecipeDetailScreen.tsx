@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -14,14 +14,33 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { DashboardStackParamList } from "@/navigation/stacks/AppStack";
 import { createShoppingList, addItem as addShoppingItem, getShoppingLists } from "@/api/shoppingLists";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { getRecipeFavoriteIds, toggleRecipeFavoriteId } from "@/services/storage";
 
 type Props = NativeStackScreenProps<DashboardStackParamList, "RecipeDetail">;
 
 export default function RecipeDetailScreen({ route }: Props) {
   const { recipe, missingIngredients = [], availableIngredients = [] } = route.params;
   const [loading, setLoading] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
 
   const ingredients: string[] = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+
+  useEffect(() => {
+    void (async () => {
+      const favorites = await getRecipeFavoriteIds();
+      setIsFavorite(favorites.includes(recipe.idMeal));
+    })();
+  }, [recipe.idMeal]);
+
+  const handleToggleFavorite = async () => {
+    try {
+      const next = await toggleRecipeFavoriteId(recipe.idMeal);
+      setIsFavorite(next.includes(recipe.idMeal));
+    } catch (error) {
+      console.error("Error toggling favorite:", error);
+      Alert.alert("Error", "No se pudo actualizar el favorito.");
+    }
+  };
 
   async function handleAddMissing() {
     try {
@@ -57,6 +76,19 @@ export default function RecipeDetailScreen({ route }: Props) {
           {recipe.strCategory ? (
             <Text style={styles.category}>{recipe.strCategory}</Text>
           ) : null}
+
+          <View style={styles.topActions}>
+            <Pressable onPress={handleToggleFavorite} style={styles.favoriteButton}>
+              <MaterialCommunityIcons
+                name={isFavorite ? "heart" : "heart-outline"}
+                size={20}
+                color={isFavorite ? colors.error : colors.primary}
+              />
+              <Text style={styles.favoriteButtonText}>
+                {isFavorite ? "En favoritos" : "Guardar favorito"}
+              </Text>
+            </Pressable>
+          </View>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Ingredientes</Text>
@@ -95,6 +127,9 @@ const styles = StyleSheet.create({
   card: { backgroundColor: colors.white, padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border },
   title: { ...typography.h2, color: colors.text, marginBottom: spacing.xs },
   category: { ...typography.bodySm, color: colors.subtext, marginBottom: spacing.sm },
+  topActions: { marginBottom: spacing.sm },
+  favoriteButton: { flexDirection: "row", alignItems: "center", gap: spacing.sm, alignSelf: "flex-start", paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 999, backgroundColor: colors.secondary },
+  favoriteButtonText: { ...typography.bodySm, color: colors.text, fontWeight: "700" },
   section: { marginTop: spacing.md },
   sectionTitle: { ...typography.h3, marginBottom: spacing.xs },
   ingredientRow: { flexDirection: "row", alignItems: "center", marginBottom: spacing.xs },
