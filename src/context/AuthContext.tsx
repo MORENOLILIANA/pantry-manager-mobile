@@ -108,7 +108,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function signOut() {
     try {
-      await apiLogout();
+      // Fire API logout but don't let a slow / hanging network call block local sign-out.
+      void apiLogout().catch((err) => console.error("API logout failed (non-blocking):", err));
     } finally {
       await clearAuthToken();
       setApiToken(null);

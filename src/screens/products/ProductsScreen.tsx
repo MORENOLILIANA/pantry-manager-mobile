@@ -10,6 +10,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Modal,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -78,6 +79,7 @@ export function ProductsScreen() {
 
   const [loading, setLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDate, setTempDate] = useState(new Date());
   const selectedUnit = watch("unit");
   const selectedLocation = watch("location");
   const expiryDate = watch("expiryDate");
@@ -97,13 +99,28 @@ export function ProductsScreen() {
     }
   }, [barcodeData, setValue]);
 
+  const openDatePicker = () => {
+    setTempDate(expiryDate || new Date());
+    setShowDatePicker(true);
+  };
+
   const handleDateChange = (event: any, date?: Date) => {
     if (Platform.OS === "android") {
       setShowDatePicker(false);
+      if (event?.type === "set" && date) {
+        setValue("expiryDate", date);
+      }
+      return;
     }
+
     if (date) {
-      setValue("expiryDate", date);
+      setTempDate(date);
     }
+  };
+
+  const confirmIOSDate = () => {
+    setValue("expiryDate", tempDate);
+    setShowDatePicker(false);
   };
 
   const onSubmit = async (data: FormData) => {
@@ -295,7 +312,7 @@ export function ProductsScreen() {
           <View style={styles.section}>
             <Text style={styles.fieldLabel}>Fecha de caducidad</Text>
             <Pressable
-              onPress={() => setShowDatePicker(true)}
+              onPress={openDatePicker}
               style={[styles.dateButton, shadows.sm]}
             >
               <MaterialCommunityIcons
@@ -309,14 +326,42 @@ export function ProductsScreen() {
             </Pressable>
           </View>
 
-          {showDatePicker && (
+          {showDatePicker && Platform.OS === "android" && (
             <DateTimePicker
               value={expiryDate}
               mode="date"
-              display={Platform.OS === "ios" ? "spinner" : "default"}
+              display="default"
               onChange={handleDateChange}
-              minimumDate={new Date()}
             />
+          )}
+
+          {showDatePicker && Platform.OS === "ios" && (
+            <Modal transparent animationType="fade" onRequestClose={() => setShowDatePicker(false)}>
+              <View style={styles.dateModalOverlay}>
+                <View style={styles.dateModalCard}>
+                  <Text style={styles.dateModalTitle}>Selecciona la fecha</Text>
+                  <DateTimePicker
+                    value={tempDate}
+                    mode="date"
+                    display="spinner"
+                    onChange={handleDateChange}
+                  />
+                  <View style={styles.dateModalActions}>
+                    <PrimaryButton
+                      title="Cancelar"
+                      variant="secondary"
+                      onPress={() => setShowDatePicker(false)}
+                      style={styles.modalHalfButton}
+                    />
+                    <PrimaryButton
+                      title="Guardar"
+                      onPress={confirmIOSDate}
+                      style={styles.modalHalfButton}
+                    />
+                  </View>
+                </View>
+              </View>
+            </Modal>
           )}
 
           {/* Ubicación */}
@@ -482,5 +527,32 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     marginBottom: spacing.sm,
+  },
+  dateModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.lg,
+  },
+  dateModalCard: {
+    width: "100%",
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+  },
+  dateModalTitle: {
+    ...typography.h3,
+    color: colors.text,
+    textAlign: "center",
+    marginBottom: spacing.md,
+  },
+  dateModalActions: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  modalHalfButton: {
+    flex: 1,
   },
 });

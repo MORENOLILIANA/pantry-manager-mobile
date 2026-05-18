@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Open Expo Web (Start + Browser)",
+      "type": "pwa-chrome",
+      "request": "launch",
+      "url": "http://localhost:19006",
+      "preLaunchTask": "Start Expo",
+      "webRoot": "${workspaceFolder}"
+    }
+  ]
+}

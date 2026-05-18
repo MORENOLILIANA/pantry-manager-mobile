@@ -1,0 +1,18 @@
+[Unit]
+Description=Pantry Manager Mobile (Expo) - user service
+After=network.target
+
+[Service]
+Type=simple
+# Update WorkingDirectory to the full path of your project before enabling
+WorkingDirectory=%h/Documentos/pantry-manager-mobile
+ExecStart=/bin/sh -lc 'npm run start'
+Restart=on-failure
+Environment=NODE_ENV=development
+
+[Install]
+WantedBy=default.target
+
+# To enable (user):
+# systemctl --user daemon-reload
+# systemctl --user enable --now pantry-manager-mobile.service

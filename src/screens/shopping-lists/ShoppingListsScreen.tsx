@@ -52,11 +52,11 @@ export function ShoppingListsScreen() {
 
       if (activeList) {
         const fullList = await getShoppingList(activeList.id);
-        setList(fullList);
+        setList({ ...fullList, items: fullList.items || [] });
       } else {
         // Crear una nueva lista si no existe activa
         const newList = await createShoppingList({ name: "Mi lista" });
-        setList(newList);
+        setList({ ...newList, items: newList.items || [] });
       }
     } catch (error) {
       console.error("Error loading shopping list:", error);
@@ -86,11 +86,18 @@ export function ShoppingListsScreen() {
 
   // Añadir nuevo item
   const handleAddItem = async () => {
-    if (!newItemText.trim() || !list) return;
+    if (!newItemText.trim()) return;
 
     try {
       setAddingItem(true);
-      const newItem = await addShoppingItem(list.id, {
+      let targetList = list;
+      if (!targetList) {
+        const created = await createShoppingList({ name: "Mi lista" });
+        targetList = { ...created, items: created.items || [] };
+        setList(targetList);
+      }
+
+      const newItem = await addShoppingItem(targetList.id, {
         name: newItemText.trim(),
         quantity: 1,
         unit: "unidades",
@@ -98,8 +105,8 @@ export function ShoppingListsScreen() {
 
       // Actualizar list en estado (agregar el nuevo item)
       setList({
-        ...list,
-        items: [...list.items, newItem],
+        ...targetList,
+        items: [...(targetList.items || []), newItem],
       });
 
       setNewItemText("");
@@ -245,7 +252,7 @@ export function ShoppingListsScreen() {
 
               // Crear nueva lista automáticamente
               const newList = await createShoppingList({ name: "Mi lista" });
-              setList(newList);
+              setList({ ...newList, items: newList.items || [] });
 
               Alert.alert("Éxito", "Lista completada");
             } catch (error) {

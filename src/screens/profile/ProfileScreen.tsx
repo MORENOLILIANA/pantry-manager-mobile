@@ -4,6 +4,7 @@ import {
   StyleSheet,
   View,
   Text,
+  Image,
   Pressable,
   ScrollView,
   Alert,
@@ -17,12 +18,31 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "@/context/AuthContext";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { colors, spacing, typography, borderRadius, shadows } from "@/config/theme";
-import { fetchCurrentUser, updateProfile, logout, type AuthUser } from "@/api/auth";
+import { fetchCurrentUser, updateProfile, type AuthUser } from "@/api/auth";
+import {
+  getUserAvatar,
+  saveUserAvatar,
+  getUserAvatarPhoto,
+  saveUserAvatarPhoto,
+  clearUserAvatarPhoto,
+} from "@/services/storage";
 
 type Navigation = NativeStackNavigationProp<any>;
+
+const AVATAR_OPTIONS = [
+  "account",
+  "account-star",
+  "account-heart",
+  "account-tie",
+  "face-man",
+  "face-woman",
+  "robot",
+  "cat",
+];
 
 export function ProfileScreen() {
   const navigation = useNavigation<Navigation>();
@@ -31,8 +51,11 @@ export function ProfileScreen() {
   const [user, setUser] = useState<AuthUser | null>(authUser || null);
   const [loading, setLoading] = useState(true);
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const [avatarModalVisible, setAvatarModalVisible] = useState(false);
   const [editName, setEditName] = useState(user?.name || "");
   const [editLoading, setEditLoading] = useState(false);
+  const [avatar, setAvatar] = useState<string | null>(null);
+  const [avatarPhotoUri, setAvatarPhotoUri] = useState<string | null>(null);
 
   // Cargar datos del usuario
   const loadUserData = async () => {
@@ -51,6 +74,12 @@ export function ProfileScreen() {
 
   useEffect(() => {
     loadUserData();
+    void (async () => {
+      const savedAvatar = await getUserAvatar();
+      const savedPhoto = await getUserAvatarPhoto();
+      if (savedAvatar) setAvatar(savedAvatar);
+      if (savedPhoto) setAvatarPhotoUri(savedPhoto);
+    })();
   }, []);
 
   useFocusEffect(
@@ -101,8 +130,7 @@ export function ProfileScreen() {
         text: "Cerrar sesión",
         onPress: async () => {
           try {
-            await logout();
-            signOut();
+            await signOut();
           } catch (error) {
             console.error("Error logging out:", error);
             Alert.alert("Error", "No se pudo cerrar sesión");
@@ -110,6 +138,68 @@ export function ProfileScreen() {
         },
         style: "destructive",
       },
+    ]);
+  };
+
+  const handleSelectAvatar = async (iconName: string) => {
+    setAvatar(iconName);
+    setAvatarPhotoUri(null);
+    await clearUserAvatarPhoto();
+    await saveUserAvatar(iconName);
+    setAvatarModalVisible(false);
+  };
+
+  const handlePickPhoto = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert("Permiso requerido", "Necesitamos acceso a tu galería para seleccionar una foto.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets?.length) {
+        const uri = result.assets[0].uri;
+        setAvatarPhotoUri(uri);
+        await saveUserAvatarPhoto(uri);
+      }
+    } catch (error) {
+      console.error("Error selecting photo:", error);
+      Alert.alert("Error", "No se pudo seleccionar la foto.");
+    }
+  };
+
+  const handleAvatarCirclePress = () => {
+    Alert.alert("Foto de perfil", "Elige cómo quieres personalizar tu perfil", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Elegir foto",
+        onPress: () => {
+          void handlePickPhoto();
+        },
+      },
+      {
+        text: "Elegir avatar",
+        onPress: () => setAvatarModalVisible(true),
+      },
+      ...(avatarPhotoUri
+        ? [
+            {
+              text: "Quitar foto",
+              style: "destructive" as const,
+              onPress: async () => {
+                setAvatarPhotoUri(null);
+                await clearUserAvatarPhoto();
+              },
+            },
+          ]
+        : []),
     ]);
   };
 
@@ -130,9 +220,18 @@ export function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Avatar */}
-        <View style={[styles.avatar, shadows.md]}>
-          <Text style={styles.avatarText}>{getInitials()}</Text>
-        </View>
+        <Pressable onPress={handleAvatarCirclePress} style={[styles.avatar, shadows.md]}>
+          {avatarPhotoUri ? (
+            <Image source={{ uri: avatarPhotoUri }} style={styles.avatarImage} />
+          ) : avatar ? (
+            <MaterialCommunityIcons name={avatar as any} size={42} color={colors.white} />
+          ) : (
+            <Text style={styles.avatarText}>{getInitials()}</Text>
+          )}
+          <View style={styles.avatarEditBadge}>
+            <MaterialCommunityIcons name="camera" size={14} color={colors.white} />
+          </View>
+        </Pressable>
 
         {/* User Info */}
         <View style={styles.userInfoSection}>
@@ -184,6 +283,26 @@ export function ProfileScreen() {
               <Text style={styles.settingSubtitle}>
                 Actualiza tu contraseña
               </Text>
+            </View>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={24}
+              color={colors.subtext}
+            />
+          </Pressable>
+
+          <Pressable
+            onPress={() => setAvatarModalVisible(true)}
+            style={[styles.settingItem, shadows.sm]}
+          >
+            <MaterialCommunityIcons
+              name="account-circle"
+              size={24}
+              color={colors.primary}
+            />
+            <View style={styles.settingContent}>
+              <Text style={styles.settingLabel}>Elegir avatar</Text>
+              <Text style={styles.settingSubtitle}>Personaliza tu perfil</Text>
             </View>
             <MaterialCommunityIcons
               name="chevron-right"
@@ -256,6 +375,40 @@ export function ProfileScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <Modal
+        visible={avatarModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAvatarModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <Pressable
+            style={styles.modalBackground}
+            onPress={() => setAvatarModalVisible(false)}
+          />
+          <View style={[styles.modalContent, shadows.lg]}>
+            <Text style={styles.modalTitle}>Elige un avatar</Text>
+            <View style={styles.avatarGrid}>
+              {AVATAR_OPTIONS.map((iconName) => (
+                <Pressable
+                  key={iconName}
+                  onPress={() => handleSelectAvatar(iconName)}
+                  style={[
+                    styles.avatarOption,
+                    avatar === iconName && styles.avatarOptionActive,
+                  ]}
+                >
+                  <MaterialCommunityIcons name={iconName as any} size={28} color={colors.primary} />
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -288,6 +441,24 @@ const styles = StyleSheet.create({
     ...typography.h1,
     color: colors.white,
     fontWeight: "700",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 40,
+  },
+  avatarEditBadge: {
+    position: "absolute",
+    right: -2,
+    bottom: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: colors.white,
   },
   userInfoSection: {
     alignItems: "center",
@@ -400,5 +571,25 @@ const styles = StyleSheet.create({
     ...typography.bodySm,
     color: colors.white,
     fontWeight: "600",
+  },
+  avatarGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    justifyContent: "center",
+  },
+  avatarOption: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.white,
+  },
+  avatarOptionActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.secondary,
   },
 });

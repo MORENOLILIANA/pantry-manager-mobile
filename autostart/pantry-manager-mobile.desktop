@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Pantry Manager Mobile (Expo)
+# Edit the Exec path to your project folder if needed
+Exec=sh -c 'cd /home/user/Documentos/pantry-manager-mobile && npm run start'
+Terminal=false
+X-GNOME-Autostart-enabled=true
+Comment=Start Expo for Pantry Manager Mobile on login
+
+# Copy this file to ~/.config/autostart/ to enable GUI autostart for your session
