@@ -241,6 +241,207 @@ Recomendación: Para desarrollo, usa la opción de VS Code (`tasks.json` + `laun
 - Sincronizar avatar/foto con backend (ahora se guarda local en AsyncStorage).
 - Mejorar validacion de estados de red y errores API en UI.
 
+## Benchmark competitivo rapido
+
+Referencias revisadas: Bring!, AnyList y SuperCook.
+
+### Lo que suelen exponer sus acciones principales
+
+- Bring!:
+  - crear y compartir listas,
+  - ver recetas o inspiracion semanal,
+  - añadir ofertas o productos promocionados a la lista,
+  - gestionar recordatorios y avisos,
+  - soporte para voz en algunos flujos externos.
+- AnyList:
+  - crear y compartir listas,
+  - coleccionar y organizar recetas,
+  - convertir ingredientes de recetas en compra,
+  - planificacion de comidas,
+  - acceso a cuenta, ayuda y sincronizacion.
+- SuperCook:
+  - añadir ingredientes al inventario,
+  - añadir por voz,
+  - descubrir recetas segun lo disponible,
+  - boton de inicio/entrada a cuenta,
+  - categorias de despensa y busqueda de ingredientes.
+
+### Botones o acciones que ya tenemos cubiertos
+
+- Login / registro / recuperar contraseña.
+- Dashboard con accesos rapidos.
+- Despensa, anadir, editar y borrar productos.
+- Escanear codigo de barras.
+- Lista de compra: anadir, marcar, desmarcar, mover a despensa, borrar, completar.
+- Recetas y detalle de receta.
+- Perfil, editar nombre, cambiar contraseña y cerrar sesion.
+
+### Botones o acciones que aun faltarian para igualar mejor a la competencia
+
+- Compartir lista en tiempo real con otros usuarios.
+- Invitar miembros a una despensa o grupo.
+- Boton de anadir por voz.
+- Boton de ofertas / cupones / sugerencias comerciales.
+- Guardar recetas favoritas.
+- Planificador semanal de comidas.
+- Busqueda y filtros mas potentes en recetas y lista.
+- Centro de notificaciones real con marcar como leidas.
+- Historial de movimientos de despensa y compras.
+- Vista de caducidades como calendario o timeline.
+
+## Datos que faltan o conviene modelar en la base de datos
+
+Si quieres que NutriCasa crezca bien, estas son las entidades y campos que conviene tener cerrados.
+
+### Usuarios
+
+- `id`
+- `name`
+- `email`
+- `password_hash`
+- `role`
+- `is_admin`
+- `avatar_icon`
+- `avatar_photo_url`
+- `phone` opcional
+- `locale` / idioma opcional
+- `created_at`, `updated_at`
+
+### Grupos / hogares / familias
+
+- `id`
+- `name`
+- `owner_user_id`
+- `description` opcional
+- `invite_code` o token de invitacion
+- `created_at`, `updated_at`
+
+### Miembros de grupo
+
+- `id`
+- `group_id`
+- `user_id`
+- `role_in_group` (owner, admin, member)
+- `status` (pending, active, left)
+- `created_at`, `updated_at`
+
+### Despensas
+
+- `id`
+- `group_id` o `user_id`
+- `name`
+- `location`
+- `notes` opcional
+- `created_at`, `updated_at`
+
+### Productos / items de despensa
+
+- `id`
+- `pantry_id`
+- `product_id` opcional si existe catálogo
+- `name`
+- `brand`
+- `barcode`
+- `category`
+- `quantity`
+- `unit`
+- `purchase_date`
+- `expiry_date`
+- `location`
+- `status` (normal, proximo, caducado)
+- `notes` opcional
+- `created_by`
+- `updated_by`
+- `created_at`, `updated_at`
+
+### Catálogo de productos
+
+- `id`
+- `barcode`
+- `name`
+- `brand`
+- `category`
+- `nutrition_data_json`
+- `source` (backend, open_food_facts, manual)
+- `image_url` opcional
+
+### Listas de compra
+
+- `id`
+- `group_id` o `user_id`
+- `name`
+- `status` (active, completed, archived)
+- `created_at`, `updated_at`
+
+### Items de lista de compra
+
+- `id`
+- `shopping_list_id`
+- `name`
+- `quantity`
+- `unit`
+- `checked`
+- `source` (manual, recipe, pantry, barcode)
+- `related_pantry_item_id` opcional
+- `priority` opcional
+- `created_at`, `updated_at`
+
+### Recetas cacheadas o favoritas
+
+- `id`
+- `external_recipe_id`
+- `name`
+- `image_url`
+- `instructions`
+- `cuisine` / `meal_type`
+- `ingredients_json`
+- `is_favorite`
+- `created_at`, `updated_at`
+
+### Notificaciones
+
+- `id`
+- `user_id` o `group_id`
+- `type`
+- `title`
+- `body`
+- `payload_json`
+- `read_at`
+- `scheduled_at`
+- `created_at`, `updated_at`
+
+### Historial / auditoria
+
+- `id`
+- `user_id`
+- `action`
+- `entity_type`
+- `entity_id`
+- `before_json`
+- `after_json`
+- `created_at`
+
+### Gastos compartidos, si lo quieres incluir de verdad
+
+- `expense_group_id`
+- `payer_user_id`
+- `amount`
+- `currency`
+- `concept`
+- `split_type`
+- `participants_json`
+- `paid_at`
+
+### Recomendacion de prioridad para tu BDD
+
+1. Usuarios, grupos y miembros.
+2. Despensas y productos.
+3. Listas de compra e items.
+4. Notificaciones.
+5. Recetas cacheadas y favoritos.
+6. Historial de movimientos.
+7. Gastos compartidos, solo si entra en el alcance final.
+
 ## Convencion de control (recomendada)
 
 Cada vez que ejecutes `npm install` o `npx expo install`:
