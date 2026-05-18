@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState } from "react";
 import {
   StyleSheet,
   View,
@@ -12,8 +12,7 @@ import {
 import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RouteProp } from "@react-navigation/native";
-import { Camera } from "expo-camera";
-import { BarCodeScanner, BarCodeEvent } from "expo-barcode-scanner";
+import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
 import { Vibration, Platform } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, borderRadius, typography } from "@/config/theme";
@@ -36,22 +35,11 @@ export function BarcodeScanScreen() {
 
   const { pantryId } = (route.params as any) || {};
 
-  const [permission, requestPermission] = Camera.useCameraPermissions();
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
   const [manualInputVisible, setManualInputVisible] = useState(false);
   const [manualBarcode, setManualBarcode] = useState("");
-  const cameraRef = useRef<Camera>(null);
-  const scanTimeoutRef = useRef<NodeJS.Timeout>();
-
-  // Solicitar permisos al montar
-  useEffect(() => {
-    (async () => {
-      const status = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(status.granted);
-    })();
-  }, []);
 
   const handleBarcodeLike = async (barcode: string) => {
     if (scanned || loading) return;
@@ -169,7 +157,7 @@ export function BarcodeScanScreen() {
     }
   };
 
-  const handleBarcodeScanned = (event: BarCodeEvent) => {
+  const handleBarcodeScanned = (event: BarcodeScanningResult) => {
     const barcode = event.data;
     handleBarcodeLike(barcode);
   };
@@ -184,7 +172,7 @@ export function BarcodeScanScreen() {
     await handleBarcodeLike(manualBarcode);
   };
 
-  if (hasPermission === null) {
+  if (!permission) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerContent}>
@@ -194,7 +182,7 @@ export function BarcodeScanScreen() {
     );
   }
 
-  if (!hasPermission) {
+  if (!permission.granted) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerContent}>
@@ -221,16 +209,15 @@ export function BarcodeScanScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Camera
-        ref={cameraRef}
+      <CameraView
         style={styles.camera}
-        onBarCodeScanned={scanned ? undefined : handleBarcodeScanned}
-        barCodeScannerSettings={{
-          barCodeTypes: [
+        onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
+        barcodeScannerSettings={{
+          barcodeTypes: [
             "ean13",
             "ean8",
-            "upca",
-            "upce",
+            "upc_a",
+            "upc_e",
             "code128",
             "code39",
           ],
@@ -270,7 +257,7 @@ export function BarcodeScanScreen() {
             </View>
           )}
         </View>
-      </Camera>
+      </CameraView>
 
       {/* Botón cerrar arriba izquierda */}
       <Pressable

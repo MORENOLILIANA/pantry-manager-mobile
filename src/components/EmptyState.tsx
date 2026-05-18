@@ -9,16 +9,21 @@ type Props = {
   subtitle?: string;
   buttonText?: string;
   onButtonPress?: () => void;
+  button?: {
+    label: string;
+    onPress: () => void;
+  };
 };
 
-export function EmptyState({ icon = "inbox", title, subtitle, buttonText, onButtonPress }: Props) {
+export function EmptyState({ icon = "inbox", title, subtitle, buttonText, onButtonPress, button }: Props) {
+  const action = button || (buttonText && onButtonPress ? { label: buttonText, onPress: onButtonPress } : null);
   return (
     <View style={styles.container}>
-      <MaterialCommunityIcons name={icon} size={64} color={colors.primary} style={styles.icon} />
+      <MaterialCommunityIcons name={icon as any} size={64} color={colors.primary} style={styles.icon} />
       <Text style={styles.title}>{title}</Text>
       {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
-      {buttonText && onButtonPress && (
-        <PrimaryButton title={buttonText} onPress={onButtonPress} style={styles.button} />
+      {action && (
+        <PrimaryButton title={action.label} onPress={action.onPress} style={styles.button} />
       )}
     </View>
   );

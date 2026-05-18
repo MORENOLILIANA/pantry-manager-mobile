@@ -33,7 +33,7 @@ export function NotificationItem({ id, type, title, description, timeAgo, read =
 
   return (
     <View style={[styles.container, !read && styles.containerUnread]}>
-      <MaterialCommunityIcons name={config.icon} size={24} color={config.color} style={styles.icon} />
+      <MaterialCommunityIcons name={config.icon as any} size={24} color={config.color} style={styles.icon} />
       <View style={styles.content}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.description}>{description}</Text>

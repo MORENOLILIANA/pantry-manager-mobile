@@ -1,6 +1,8 @@
 import { apiClient } from "@/api/client";
 import type { AuthResponse, AuthUser } from "@/types/auth";
 
+export type { AuthUser } from "@/types/auth";
+
 type Credentials = {
 	email: string;
 	password: string;

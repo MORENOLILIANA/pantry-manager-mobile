@@ -184,7 +184,7 @@ export function DashboardScreen() {
             </View>
             <Pressable
               onPress={() =>
-                navigation.navigate("PantriesStack", { screen: "Pantries" })
+                navigation.navigate("PantriesStack", { screen: "Pantries" } as any)
               }
             >
               <Text style={styles.alertButton}>Ver</Text>
@@ -194,22 +194,14 @@ export function DashboardScreen() {
 
         {/* Stats Row */}
         <View style={styles.statsRow}>
-          <StatCard
-            icon="package-variant"
-            label="En despensa"
-            value={totalItems.toString()}
-          />
+            <StatCard icon="package-variant" label="En despensa" value={totalItems.toString()} />
           <StatCard
             icon="alert-circle"
             label="Próximos"
             value={expiringItems.toString()}
             highlight={expiringItems > 0 ? "orange" : undefined}
           />
-          <StatCard
-            icon="shopping-cart"
-            label="En lista"
-            value={pendingItems.toString()}
-          />
+          <StatCard icon="shopping-cart" label="En lista" value={pendingItems.toString()} />
         </View>
 
         {/* Quick Access */}
@@ -218,7 +210,7 @@ export function DashboardScreen() {
           <View style={styles.quickAccessGrid}>
             <Pressable
               onPress={() =>
-                navigation.navigate("PantriesStack", { screen: "Products" })
+                navigation.navigate("PantriesStack", { screen: "Products" } as any)
               }
               style={[styles.quickAccessButton, shadows.sm]}
             >
@@ -231,7 +223,7 @@ export function DashboardScreen() {
             </Pressable>
             <Pressable
               onPress={() =>
-                navigation.navigate("PantriesStack", { screen: "BarcodeScan" })
+                navigation.navigate("PantriesStack", { screen: "BarcodeScan" } as any)
               }
               style={[styles.quickAccessButton, shadows.sm]}
             >
@@ -247,7 +239,7 @@ export function DashboardScreen() {
               style={[styles.quickAccessButton, shadows.sm]}
             >
               <MaterialCommunityIcons
-                name="chef-hat"
+                name={"chef-hat" as any}
                 size={32}
                 color={colors.primary}
               />
@@ -255,14 +247,12 @@ export function DashboardScreen() {
             </Pressable>
             <Pressable
               onPress={() =>
-                navigation.navigate("ShoppingListStack", {
-                  screen: "ShoppingLists",
-                })
+                navigation.navigate("ShoppingListStack", { screen: "ShoppingLists" } as any)
               }
               style={[styles.quickAccessButton, shadows.sm]}
             >
               <MaterialCommunityIcons
-                name="list-box"
+                name={"format-list-bulleted" as any}
                 size={32}
                 color={colors.primary}
               />

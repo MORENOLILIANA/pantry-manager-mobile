@@ -17,6 +17,7 @@ export interface PantryItem {
   location: string;
   notes?: string;
   product: Product;
+  created_at?: string;
 }
 
 export interface Pantry {

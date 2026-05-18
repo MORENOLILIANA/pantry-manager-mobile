@@ -6,18 +6,18 @@ import { StatusBadge } from "@/components/StatusBadge";
 type Status = "normal" | "proximo" | "caducado";
 
 type Props = {
-  id: string;
   name: string;
+  brand?: string;
   quantity: number;
   unit: string;
-  expiryDate: string;
   location: string;
-  status: Status;
+  expiryDate?: string;
+  status?: Status;
   onEdit?: () => void;
   onDelete?: () => void;
 };
 
-export function ProductCard({ id, name, quantity, unit, expiryDate, location, status, onEdit, onDelete }: Props) {
+export function ProductCard({ name, brand, quantity, unit, expiryDate, location, status, onEdit, onDelete }: Props) {
   const formatDate = (date: string) => {
     try {
       const d = new Date(date);
@@ -32,7 +32,8 @@ export function ProductCard({ id, name, quantity, unit, expiryDate, location, st
       <View style={styles.header}>
         <View style={styles.titleSection}>
           <Text style={styles.name}>{name}</Text>
-          <StatusBadge status={status} />
+          {brand ? <Text style={styles.brand}>{brand}</Text> : null}
+          {status ? <StatusBadge status={status} /> : null}
         </View>
         <View style={styles.actions}>
           {onEdit && (
@@ -57,7 +58,7 @@ export function ProductCard({ id, name, quantity, unit, expiryDate, location, st
         </View>
         <View style={styles.detailRow}>
           <MaterialCommunityIcons name="calendar" size={16} color={colors.subtext} />
-          <Text style={styles.detailText}>{formatDate(expiryDate)}</Text>
+          <Text style={styles.detailText}>{expiryDate ? formatDate(expiryDate) : "Sin fecha"}</Text>
         </View>
         <View style={styles.detailRow}>
           <MaterialCommunityIcons name="map-marker" size={16} color={colors.subtext} />
@@ -91,6 +92,11 @@ const styles = StyleSheet.create({
     ...typography.body,
     fontWeight: "700",
     color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  brand: {
+    ...typography.bodySm,
+    color: colors.subtext,
     marginBottom: spacing.xs,
   },
   actions: {

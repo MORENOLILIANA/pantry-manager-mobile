@@ -1,13 +1,18 @@
 import { StyleSheet, Text, View } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { colors, spacing, borderRadius, typography } from "@/config/theme";
 
 type Props = {
   label: string;
   value: string;
+  icon?: string;
+  highlight?: string;
 };
 
-export function StatCard({ label, value }: Props) {
+export function StatCard({ label, value, icon, highlight }: Props) {
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, highlight === "orange" && styles.cardHighlight]}>
+      {icon ? <MaterialCommunityIcons name={icon as any} size={20} color={highlight === "orange" ? "#F39C12" : colors.primary} /> : null}
       <Text style={styles.label}>{label}</Text>
       <Text style={styles.value}>{value}</Text>
     </View>
@@ -18,22 +23,25 @@ const styles = StyleSheet.create({
   card: {
     flex: 1,
     minHeight: 96,
-    padding: 16,
-    borderRadius: 20,
-    backgroundColor: "rgba(17, 24, 39, 0.92)",
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.white,
     borderWidth: 1,
-    borderColor: "#1f2937"
+    borderColor: colors.border,
+    gap: spacing.xs,
+  },
+  cardHighlight: {
+    borderColor: "#F39C12",
+    backgroundColor: "#FFF9EF"
   },
   label: {
-    color: "#9ca3af",
-    fontSize: 12,
+    color: colors.subtext,
+    ...typography.caption,
     textTransform: "uppercase",
-    letterSpacing: 1
+    letterSpacing: 1,
   },
   value: {
-    marginTop: 12,
-    color: "#f9fafb",
-    fontSize: 28,
-    fontWeight: "800"
+    color: colors.text,
+    ...typography.h2,
   }
 });

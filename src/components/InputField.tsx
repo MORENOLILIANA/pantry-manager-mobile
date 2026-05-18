@@ -1,3 +1,4 @@
+import React from "react";
 import { StyleSheet, Text, TextInput, View, ViewStyle } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, borderRadius, typography } from "@/config/theme";
@@ -5,15 +6,17 @@ import { colors, spacing, borderRadius, typography } from "@/config/theme";
 type Props = {
   label?: string;
   placeholder?: string;
-  icon?: string;
+  icon?: React.ReactNode | string;
   error?: string;
   value: string;
   onChangeText: (text: string) => void;
+  onBlur?: () => void;
   secureTextEntry?: boolean;
   keyboardType?: "default" | "email-address" | "numeric" | "decimal-pad" | "phone-pad";
   editable?: boolean;
   multiline?: boolean;
   numberOfLines?: number;
+  containerStyle?: ViewStyle;
   style?: ViewStyle;
 };
 
@@ -24,25 +27,33 @@ export function InputField({
   error,
   value,
   onChangeText,
+  onBlur,
   secureTextEntry,
   keyboardType = "default",
   editable = true,
   multiline = false,
   numberOfLines,
+  containerStyle,
   style,
 }: Props) {
   const hasError = !!error;
+  const resolvedContainerStyle = containerStyle || style;
 
   return (
-    <View style={style}>
+    <View style={resolvedContainerStyle}>
       {label && <Text style={styles.label}>{label}</Text>}
       <View style={[styles.inputContainer, hasError && styles.inputContainerError]}>
-        {icon && <MaterialCommunityIcons name={icon} size={20} color={colors.subtext} style={styles.icon} />}
+        {typeof icon === "string" ? (
+          <MaterialCommunityIcons name={icon as any} size={20} color={colors.subtext} style={styles.icon} />
+        ) : (
+          icon || null
+        )}
         <TextInput
           placeholder={placeholder}
           placeholderTextColor={colors.placeholder}
           value={value}
           onChangeText={onChangeText}
+          onBlur={onBlur}
           secureTextEntry={secureTextEntry}
           keyboardType={keyboardType}
           editable={editable}

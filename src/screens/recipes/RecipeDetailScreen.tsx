@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -17,11 +17,11 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 type Props = NativeStackScreenProps<DashboardStackParamList, "RecipeDetail">;
 
-export default function RecipeDetailScreen({ route, navigation }: Props) {
-  const { recipe } = route.params;
+export default function RecipeDetailScreen({ route }: Props) {
+  const { recipe, missingIngredients = [], availableIngredients = [] } = route.params;
   const [loading, setLoading] = useState(false);
 
-  const missing = useMemo(() => recipe.ingredients.filter((i) => !i), [recipe]);
+  const ingredients: string[] = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
 
   async function handleAddMissing() {
     try {
@@ -32,11 +32,6 @@ export default function RecipeDetailScreen({ route, navigation }: Props) {
       if (!list) {
         list = await createShoppingList({ name: "Mi lista" });
       }
-
-      const missingIngredients = recipe.ingredients.filter((i) => {
-        // naive placeholder: treat all as missing for now
-        return true;
-      });
 
       await Promise.all(
         missingIngredients.map((ing) =>
@@ -65,9 +60,13 @@ export default function RecipeDetailScreen({ route, navigation }: Props) {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Ingredientes</Text>
-            {recipe.ingredients.map((ing) => (
+            {ingredients.map((ing) => (
               <View key={ing} style={styles.ingredientRow}>
-                <MaterialCommunityIcons name="circle-outline" size={16} color={colors.subtext} />
+                <MaterialCommunityIcons
+                  name={availableIngredients.includes(ing) ? "check-circle" : "circle-outline"}
+                  size={16}
+                  color={availableIngredients.includes(ing) ? colors.primary : colors.subtext}
+                />
                 <Text style={styles.ingredientText}>{ing}</Text>
               </View>
             ))}
@@ -97,7 +96,7 @@ const styles = StyleSheet.create({
   title: { ...typography.h2, color: colors.text, marginBottom: spacing.xs },
   category: { ...typography.bodySm, color: colors.subtext, marginBottom: spacing.sm },
   section: { marginTop: spacing.md },
-  sectionTitle: { ...typography.h4, marginBottom: spacing.xs },
+  sectionTitle: { ...typography.h3, marginBottom: spacing.xs },
   ingredientRow: { flexDirection: "row", alignItems: "center", marginBottom: spacing.xs },
   ingredientText: { marginLeft: spacing.sm, ...typography.body },
   instructions: { ...typography.body, color: colors.text },

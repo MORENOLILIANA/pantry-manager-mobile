@@ -31,6 +31,9 @@ import {
 } from "@/api/shoppingLists";
 import { addItem as addItemToPantry, getPantries } from "@/api/pantries";
 
+type SeparatorRow = { id: string; separator: true };
+type ShoppingListRow = ShoppingListItem | SeparatorRow;
+
 export function ShoppingListsScreen() {
   const [list, setList] = useState<ShoppingList | null>(null);
   const [loading, setLoading] = useState(true);
@@ -259,6 +262,7 @@ export function ShoppingListsScreen() {
 
   const pendingItems = list?.items.filter((i) => !i.purchased) || [];
   const purchasedItems = list?.items.filter((i) => i.purchased) || [];
+  const separatorRow: SeparatorRow = { id: "separator", separator: true };
 
   if (loading) {
     return (
@@ -346,9 +350,7 @@ export function ShoppingListsScreen() {
           pendingItems.length > 0
             ? [
                 ...pendingItems,
-                ...(purchasedItems.length > 0
-                  ? [{ id: "separator", purchased: true }]
-                  : []),
+                ...(purchasedItems.length > 0 ? [separatorRow] : []),
                 ...purchasedItems,
               ]
             : purchasedItems
@@ -357,9 +359,9 @@ export function ShoppingListsScreen() {
         onRefresh={handleRefresh}
         refreshing={refreshing}
         contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => {
+        renderItem={({ item }: { item: ShoppingListRow }) => {
           // Separator
-          if (item.id === "separator") {
+          if ("separator" in item) {
             return (
               <View style={styles.sectionSeparator}>
                 <Text style={styles.sectionLabel}>

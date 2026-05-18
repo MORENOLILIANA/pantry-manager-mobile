@@ -120,9 +120,9 @@ export function PantriesScreen() {
       (expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
     );
 
-    if (daysUntilExpiry < 0) return "Caducado";
-    if (daysUntilExpiry < 7) return "Próximo";
-    return "Normal";
+    if (daysUntilExpiry < 0) return "caducado";
+    if (daysUntilExpiry < 7) return "proximo";
+    return "normal";
   };
 
   // Eliminar item con confirmación
@@ -254,10 +254,7 @@ export function PantriesScreen() {
                 ? "No se encontraron productos con esos filtros"
                 : "Añade el primer producto a tu despensa"
             }
-            button={{
-              label: "Añadir producto",
-              onPress: handleAddItem,
-            }}
+            button={{ label: "Añadir producto", onPress: handleAddItem }}
           />
         </View>
       ) : (

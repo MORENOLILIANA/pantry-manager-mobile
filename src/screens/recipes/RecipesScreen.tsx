@@ -187,7 +187,15 @@ export function RecipesScreen() {
               <View style={styles.actionsRow}>
                 <Pressable
                   onPress={() =>
-                    navigation.navigate("RecipeDetail", { recipe: meal })
+                    navigation.navigate("RecipeDetail", {
+                      recipe: meal,
+                      availableIngredients: meal.ingredients.filter((ingredient) =>
+                        hasIngredient(ingredient)
+                      ),
+                      missingIngredients: meal.ingredients.filter(
+                        (ingredient) => !hasIngredient(ingredient)
+                      ),
+                    })
                   }
                   style={styles.viewButton}
                 >

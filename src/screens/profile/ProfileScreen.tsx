@@ -62,7 +62,7 @@ export function ProfileScreen() {
   // Obtener iniciales (primera letra nombre + primera letra apellido)
   const getInitials = () => {
     if (!user?.name) return "U";
-    const names = user.name.split(" ").filter((n) => n.length > 0);
+    const names = user.name.split(" ").filter((n: string) => n.length > 0);
     if (names.length >= 2) {
       return (names[0][0] + names[names.length - 1][0]).toUpperCase();
     }
@@ -200,7 +200,7 @@ export function ProfileScreen() {
       {/* Logout Button */}
       <View style={styles.footer}>
         <PrimaryButton
-          label="Cerrar sesión"
+            title="Cerrar sesión"
           onPress={handleLogout}
           variant="danger"
         />

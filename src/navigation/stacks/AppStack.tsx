@@ -1,5 +1,6 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import type { NavigatorScreenParams } from "@react-navigation/native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Platform, StyleSheet, View } from "react-native";
 import { colors, spacing } from "@/config/theme";
@@ -18,17 +19,21 @@ import RecipeDetailScreen from "@/screens/recipes/RecipeDetailScreen";
 import { NotificationsScreen } from "@/screens/notifications/NotificationsScreen";
 
 export type AppStackParamList = {
-  DashboardStack: undefined;
-  PantriesStack: undefined;
+  DashboardStack: NavigatorScreenParams<DashboardStackParamList> | undefined;
+  PantriesStack: NavigatorScreenParams<PantriesStackParamList> | undefined;
   BarcodeScannerTab: undefined;
-  ShoppingListStack: undefined;
+  ShoppingListStack: NavigatorScreenParams<ShoppingListStackParamList> | undefined;
   ProfileStack: undefined;
 };
 
 export type DashboardStackParamList = {
   Dashboard: undefined;
   Recipes: undefined;
-  RecipeDetail: { recipe: any };
+  RecipeDetail: {
+    recipe: any;
+    availableIngredients?: string[];
+    missingIngredients?: string[];
+  };
   Notifications: undefined;
   PantriesStack?: { screen: string };
   ShoppingListStack?: { screen: string };
@@ -221,7 +226,7 @@ export function AppStack() {
             iconName = "account-circle";
           }
 
-          return <MaterialCommunityIcons name={iconName} size={size} color={color} />;
+          return <MaterialCommunityIcons name={iconName as any} size={size} color={color} />;
         },
       })}
     >
