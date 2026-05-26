@@ -23,6 +23,7 @@ import { useAuth } from "@/context/AuthContext";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { colors, spacing, typography, borderRadius, shadows } from "@/config/theme";
 import { fetchCurrentUser, updateProfile, type AuthUser } from "@/api/auth";
+import { getPantries, updatePantry, deletePantry, type Pantry } from "@/api/pantries";
 import {
   getUserAvatar,
   saveUserAvatar,
@@ -64,20 +65,71 @@ export function ProfileScreen() {
   const [editLoading, setEditLoading] = useState(false);
   const [avatar, setAvatar] = useState<string | null>(null);
   const [avatarPhotoUri, setAvatarPhotoUri] = useState<string | null>(null);
+  const [pantries, setPantries] = useState<Pantry[]>([]);
+  const [pantryModalVisible, setPantryModalVisible] = useState(false);
+  const [editingPantry, setEditingPantry] = useState<Pantry | null>(null);
+  const [pantryEditName, setPantryEditName] = useState("");
+  const [pantryLoading, setPantryLoading] = useState(false);
 
-  // Cargar datos del usuario
+  // Cargar datos del usuario y despensas
   const loadUserData = async () => {
     try {
       setLoading(true);
-      const userData = await fetchCurrentUser();
+      const [userData, userPantries] = await Promise.all([
+        fetchCurrentUser(),
+        getPantries().catch(() => [] as Pantry[]),
+      ]);
       setUser(userData);
       setEditName(userData.name);
+      setPantries(userPantries);
     } catch (error) {
       console.error("Error fetching user:", error);
       crossAlert("Error", "No se pudieron cargar los datos del usuario");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRenamePantry = async () => {
+    if (!editingPantry || !pantryEditName.trim()) return;
+    try {
+      setPantryLoading(true);
+      const updated = await updatePantry(editingPantry.id, { name: pantryEditName.trim() });
+      setPantries((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      setPantryModalVisible(false);
+    } catch {
+      crossAlert("Error", "No se pudo renombrar la despensa.");
+    } finally {
+      setPantryLoading(false);
+    }
+  };
+
+  const handleDeletePantry = (pantry: Pantry) => {
+    Alert.alert(
+      "Eliminar despensa",
+      `¿Eliminar "${pantry.name}"? Se borrarán todos sus productos.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deletePantry(pantry.id);
+              setPantries((prev) => prev.filter((p) => p.id !== pantry.id));
+            } catch {
+              crossAlert("Error", "No se pudo eliminar la despensa.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const openRenameModal = (pantry: Pantry) => {
+    setEditingPantry(pantry);
+    setPantryEditName(pantry.name);
+    setPantryModalVisible(true);
   };
 
   useEffect(() => {
@@ -301,28 +353,6 @@ export function ProfileScreen() {
           </Pressable>
 
           <Pressable
-            onPress={() => navigation.navigate("Groups")}
-            style={[styles.settingItem, shadows.sm]}
-          >
-            <MaterialCommunityIcons
-              name="account-group"
-              size={24}
-              color={colors.primary}
-            />
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Grupos y compartidos</Text>
-              <Text style={styles.settingSubtitle}>
-                Crea hogares y comparte listas
-              </Text>
-            </View>
-            <MaterialCommunityIcons
-              name="chevron-right"
-              size={24}
-              color={colors.subtext}
-            />
-          </Pressable>
-
-          <Pressable
             onPress={() => setAvatarModalVisible(true)}
             style={[styles.settingItem, shadows.sm]}
           >
@@ -342,6 +372,49 @@ export function ProfileScreen() {
             />
           </Pressable>
         </View>
+
+        {/* Section: Pantries */}
+        {pantries.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Mis despensas</Text>
+            {pantries.map((pantry) => {
+              const isOwner = pantry.user_id == null || pantry.user_id === user?.id;
+              return (
+                <View key={pantry.id} style={[styles.pantryItem, shadows.sm]}>
+                  <MaterialCommunityIcons
+                    name={isOwner ? "fridge-outline" : "fridge"}
+                    size={22}
+                    color={isOwner ? colors.primary : colors.subtext}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.pantryName} numberOfLines={1}>{pantry.name}</Text>
+                    {!isOwner && (
+                      <Text style={styles.pantryGuestLabel}>Despensa compartida</Text>
+                    )}
+                  </View>
+                  {isOwner && (
+                    <>
+                      <Pressable
+                        onPress={() => openRenameModal(pantry)}
+                        style={styles.pantryActionBtn}
+                        hitSlop={8}
+                      >
+                        <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.primary} />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleDeletePantry(pantry)}
+                        style={styles.pantryActionBtn}
+                        hitSlop={8}
+                      >
+                        <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.error} />
+                      </Pressable>
+                    </>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        )}
 
         {/* Spacer */}
         <View style={styles.spacer} />
@@ -397,6 +470,53 @@ export function ProfileScreen() {
                 style={[styles.modalButton, styles.modalButtonSave]}
               >
                 {editLoading ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <Text style={styles.modalButtonSaveText}>Guardar</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Rename Pantry Modal */}
+      <Modal
+        visible={pantryModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPantryModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.modalBackground} onPress={() => setPantryModalVisible(false)} />
+          <View style={[styles.modalContent, shadows.lg]}>
+            <Text style={styles.modalTitle}>Renombrar despensa</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Nombre de la despensa"
+              placeholderTextColor={colors.subtext}
+              value={pantryEditName}
+              onChangeText={setPantryEditName}
+              editable={!pantryLoading}
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <Pressable
+                onPress={() => setPantryModalVisible(false)}
+                disabled={pantryLoading}
+                style={[styles.modalButton, styles.modalButtonCancel]}
+              >
+                <Text style={styles.modalButtonCancelText}>Cancelar</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleRenamePantry}
+                disabled={pantryLoading}
+                style={[styles.modalButton, styles.modalButtonSave]}
+              >
+                {pantryLoading ? (
                   <ActivityIndicator size="small" color={colors.white} />
                 ) : (
                   <Text style={styles.modalButtonSaveText}>Guardar</Text>
@@ -602,6 +722,32 @@ const styles = StyleSheet.create({
     ...typography.bodySm,
     color: colors.white,
     fontWeight: "600",
+  },
+  pantryItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.md,
+  },
+  pantryName: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: "600",
+    flex: 1,
+  },
+  pantryActionBtn: {
+    padding: spacing.xs,
+  },
+  pantryGuestLabel: {
+    ...typography.caption,
+    color: colors.subtext,
+    marginTop: 2,
   },
   avatarGrid: {
     flexDirection: "row",

@@ -14,7 +14,6 @@ import { ProductsScreen } from "@/screens/products/ProductsScreen";
 import { BarcodeScanScreen } from "@/screens/products/BarcodeScanScreen";
 import { ProfileScreen } from "@/screens/profile/ProfileScreen";
 import { ChangePasswordScreen } from "@/screens/profile/ChangePasswordScreen";
-import { GroupsScreen } from "@/screens/groups/GroupsScreen";
 import { RecipesScreen } from "@/screens/recipes/RecipesScreen";
 import RecipeDetailScreen from "@/screens/recipes/RecipeDetailScreen";
 import { NotificationsScreen } from "@/screens/notifications/NotificationsScreen";
@@ -71,7 +70,6 @@ export type ShoppingListStackParamList = {
 export type ProfileStackParamList = {
   Profile: undefined;
   ChangePassword: undefined;
-  Groups: undefined;
 };
 
 const Tab = createBottomTabNavigator<AppStackParamList>();
@@ -189,11 +187,6 @@ function ProfileStackNavigator() {
         component={ChangePasswordScreen}
         options={{ title: "Cambiar contraseña" }}
       />
-      <ProfileStack.Screen
-        name="Groups"
-        component={GroupsScreen}
-        options={{ title: "Grupos y compartidos" }}
-      />
     </ProfileStack.Navigator>
   );
 }
@@ -228,7 +221,7 @@ export function AppStack() {
           } else if (route.name === "BarcodeScannerTab") {
             iconName = "barcode";
           } else if (route.name === "ShoppingListStack") {
-            iconName = "shopping-cart";
+            iconName = "cart-outline";
           } else if (route.name === "ProfileStack") {
             iconName = "account-circle";
           }

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   StyleSheet,
   View,
@@ -71,6 +71,7 @@ export function BarcodeScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
+  const isProcessing = useRef(false);
   const [manualInputVisible, setManualInputVisible] = useState(false);
   const [manualBarcode, setManualBarcode] = useState("");
   const [resolvedPantryId, setResolvedPantryId] = useState<string | undefined>(routePantryId);
@@ -88,6 +89,7 @@ export function BarcodeScanScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      isProcessing.current = false;
       setScanned(false);
       setLoading(false);
     }, [])
@@ -97,6 +99,7 @@ export function BarcodeScanScreen() {
   const goToProducts = (params: Record<string, any>) => {
     if (!resolvedPantryId) {
       Alert.alert("Sin despensa", "Crea primero una despensa desde la sección Mi Despensa.");
+      isProcessing.current = false;
       setScanned(false);
       setLoading(false);
       return;
@@ -109,7 +112,8 @@ export function BarcodeScanScreen() {
   };
 
   const handleBarcodeLike = async (barcode: string) => {
-    if (scanned || loading) return;
+    if (isProcessing.current) return;
+    isProcessing.current = true;
 
     setScanned(true);
     setLoading(true);
@@ -161,20 +165,24 @@ export function BarcodeScanScreen() {
         [
           {
             text: "Cancelar",
-            onPress: () => { setScanned(false); setLoading(false); },
+            onPress: () => {
+              isProcessing.current = false;
+              setScanned(false);
+              setLoading(false);
+            },
             style: "cancel",
           },
           {
             text: "Añadir manualmente",
             onPress: () => {
-              setScanned(false);
-              goToProducts({ mode: "add" });
+              goToProducts({ mode: "add", barcodeData: { barcode, name: "", brand: "", category: "" } });
             },
           },
         ],
         { cancelable: false }
       );
     } catch (error) {
+      isProcessing.current = false;
       console.error("Error scanning barcode:", error);
       setScanned(false);
       setLoading(false);

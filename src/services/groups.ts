@@ -142,6 +142,23 @@ export async function updateGroupSharing(groupId: string, sharedShoppingListId?:
   return groups[index];
 }
 
+export async function renameGroup(groupId: string, newName: string): Promise<PantryGroup> {
+  const groups = await readGroups();
+  const index = groups.findIndex((g) => g.id === groupId);
+  if (index === -1) throw new Error("No se encontró el grupo.");
+  groups[index] = { ...groups[index], name: newName.trim(), updated_at: new Date().toISOString() };
+  await writeGroups(groups);
+  return groups[index];
+}
+
+export async function deleteGroup(groupId: string): Promise<void> {
+  const groups = await readGroups();
+  const next = groups.filter((g) => g.id !== groupId);
+  await writeGroups(next);
+  const activeId = await getActiveGroupId();
+  if (activeId === groupId) await setActiveGroupId(next[0]?.id ?? null);
+}
+
 export async function setActiveGroupId(groupId: string | null) {
   if (!groupId) {
     await AsyncStorage.removeItem(activeGroupIdKey);

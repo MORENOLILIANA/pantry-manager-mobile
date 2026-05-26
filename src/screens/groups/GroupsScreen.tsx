@@ -21,16 +21,18 @@ import { getShoppingLists } from "@/api/shoppingLists";
 import {
   addGroupMember,
   createGroup,
+  deleteGroup,
   getActiveGroupId,
   getGroups,
   joinGroupByCode,
+  renameGroup,
   setActiveGroupId,
   updateGroupSharing,
   type PantryGroup,
 } from "@/services/groups";
 
 
-type ModalMode = "create" | "join" | "member";
+type ModalMode = "create" | "join" | "member" | "rename";
 
 export function GroupsScreen() {
   const [loading, setLoading] = useState(true);
@@ -156,6 +158,47 @@ export function GroupsScreen() {
     await setActiveGroupId(groupId);
   };
 
+  const handleRenameGroup = async () => {
+    if (!selectedGroup || !groupName.trim()) return;
+    try {
+      setBusy(true);
+      const updated = await renameGroup(selectedGroup.id, groupName.trim());
+      setGroups((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
+      setGroupName("");
+      setModalMode(null);
+    } catch {
+      Alert.alert("Error", "No se pudo renombrar el grupo.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDeleteGroup = (group: PantryGroup) => {
+    Alert.alert(
+      "Eliminar grupo",
+      `¿Eliminar "${group.name}"? Se perderán los miembros y la vinculación de lista.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteGroup(group.id);
+              setGroups((prev) => prev.filter((g) => g.id !== group.id));
+              if (selectedGroupId === group.id) {
+                setSelectedGroupId(null);
+                setActiveGroupIdState(null);
+              }
+            } catch {
+              Alert.alert("Error", "No se pudo eliminar el grupo.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleShareActiveList = async () => {
     if (!selectedGroup) {
       Alert.alert("Error", "Selecciona un grupo primero.");
@@ -245,6 +288,14 @@ export function GroupsScreen() {
                 <MaterialCommunityIcons name="share-variant" size={18} color={colors.primary} />
                 <Text style={styles.inlineActionText}>Vincular lista activa</Text>
               </Pressable>
+              <Pressable onPress={() => { setGroupName(selectedGroup.name); setModalMode("rename"); }} style={styles.inlineAction}>
+                <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.primary} />
+                <Text style={styles.inlineActionText}>Renombrar</Text>
+              </Pressable>
+              <Pressable onPress={() => handleDeleteGroup(selectedGroup)} style={[styles.inlineAction, styles.inlineActionDanger]}>
+                <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.error} />
+                <Text style={[styles.inlineActionText, { color: colors.error }]}>Eliminar grupo</Text>
+              </Pressable>
             </View>
 
             <Text style={styles.sectionLabel}>Miembros</Text>
@@ -304,11 +355,14 @@ export function GroupsScreen() {
           <Pressable style={styles.modalBackground} onPress={() => setModalMode(null)} />
           <View style={[styles.modalContent, shadows.lg]}>
             <Text style={styles.modalTitle}>
-              {modalMode === "create" ? "Crear grupo" : modalMode === "join" ? "Unirme a grupo" : "Añadir miembro"}
+              {modalMode === "create" ? "Crear grupo"
+                : modalMode === "join" ? "Unirme a grupo"
+                : modalMode === "rename" ? "Renombrar grupo"
+                : "Añadir miembro"}
             </Text>
 
-            {modalMode === "create" ? (
-              <TextInput value={groupName} onChangeText={setGroupName} placeholder="Nombre del grupo" placeholderTextColor={colors.subtext} style={styles.input} />
+            {(modalMode === "create" || modalMode === "rename") ? (
+              <TextInput value={groupName} onChangeText={setGroupName} placeholder="Nombre del grupo" placeholderTextColor={colors.subtext} style={styles.input} autoFocus />
             ) : modalMode === "join" ? (
               <>
                 <TextInput value={inviteCode} onChangeText={setInviteCode} placeholder="Código de invitación" placeholderTextColor={colors.subtext} style={styles.input} autoCapitalize="characters" />
@@ -324,14 +378,9 @@ export function GroupsScreen() {
               </Pressable>
               <Pressable
                 onPress={() => {
-                  if (modalMode === "create") {
-                    void handleCreateGroup();
-                    return;
-                  }
-                  if (modalMode === "join") {
-                    void handleJoinGroup();
-                    return;
-                  }
+                  if (modalMode === "create") { void handleCreateGroup(); return; }
+                  if (modalMode === "join") { void handleJoinGroup(); return; }
+                  if (modalMode === "rename") { void handleRenameGroup(); return; }
                   void handleAddMember();
                 }}
                 disabled={busy}
@@ -370,6 +419,7 @@ const styles = StyleSheet.create({
   cardActions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md, marginBottom: spacing.md },
   inlineAction: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.secondary, borderRadius: 999 },
   inlineActionText: { ...typography.bodySm, color: colors.primary, fontWeight: "700" },
+  inlineActionDanger: { backgroundColor: colors.errorLight },
   sectionLabel: { ...typography.bodySm, color: colors.text, fontWeight: "700", marginBottom: spacing.sm },
   memberRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.sm },
   memberAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },

@@ -19,6 +19,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { DashboardStackParamList } from "@/navigation/stacks/AppStack";
 import { EmptyState } from "@/components/EmptyState";
 import { getRecipeFavoriteIds, toggleRecipeFavoriteId } from "@/services/storage";
+import { CATEGORY_ES, translateIngredient } from "@/services/translationService";
 
 type Navigation = NativeStackNavigationProp<DashboardStackParamList>;
 
@@ -168,11 +169,12 @@ async function fetchMealDetail(idMeal: string): Promise<MealDetail | null> {
     const meal = json?.meals?.[0];
     if (!meal) return null;
 
-    const ingredients: string[] = [];
+    const rawIngredients: string[] = [];
     for (let i = 1; i <= 20; i++) {
       const ing = meal[`strIngredient${i}`];
-      if (ing && ing.trim()) ingredients.push(ing.trim().toLowerCase());
+      if (ing && ing.trim()) rawIngredients.push(ing.trim().toLowerCase());
     }
+    const ingredients = [...new Set(rawIngredients)];
 
     return {
       idMeal: meal.idMeal,
@@ -218,18 +220,32 @@ export function RecipesScreen() {
         const pantry = await getPantry(pantries[0].id).catch(() => null);
         const rawNames = (pantry?.items ?? []).map((i) => i.product.name.toLowerCase());
 
-        // Traduce los nombres al inglés para TheMealDB
-        const englishNames = rawNames.map(translateToEnglish);
-        const uniqueEnglish = [...new Set(englishNames)];
+        // Traduce al inglés: intenta nombre completo y luego palabra a palabra
+        const englishSet = new Set<string>();
+        for (const name of rawNames) {
+          const full = translateToEnglish(name);
+          if (full !== name) {
+            englishSet.add(full);
+          }
+          for (const word of name.split(/[\s\-,()]+/)) {
+            const w = word.trim();
+            if (w.length < 3) continue;
+            const t = translateToEnglish(w);
+            if (t !== w) englishSet.add(t);
+          }
+        }
+        const uniqueEnglish = [...englishSet];
         setPantryWords(uniqueEnglish);
 
-        if (!uniqueEnglish.length) {
+        // Si no hay ingredientes traducibles, usar términos populares de fallback
+        const searchTerms = uniqueEnglish.length > 0
+          ? uniqueEnglish.slice(0, 6)
+          : ["chicken", "pasta", "beef", "eggs", "potato"];
+
+        if (rawNames.length === 0) {
           setMeals([]);
           return;
         }
-
-        // Busca con los primeros 6 ingredientes en paralelo
-        const searchTerms = uniqueEnglish.slice(0, 6);
         const searchResults = await Promise.all(
           searchTerms.map(fetchMealsByIngredient)
         );
@@ -263,7 +279,6 @@ export function RecipesScreen() {
             ).length;
             return { ...meal, matchCount };
           })
-          .filter((m) => m.matchCount > 0)
           .sort((a, b) => b.matchCount - a.matchCount);
 
         setMeals(scored);
@@ -311,13 +326,17 @@ export function RecipesScreen() {
     );
   }
 
-  if (!meals.length) {
+  if (!meals.length && !loading) {
     return (
       <SafeAreaView style={styles.container}>
         <EmptyState
           icon="food-apple"
           title="Sin recetas"
-          subtitle="Añade productos a tu despensa para descubrir recetas que puedes preparar"
+          subtitle={
+            pantryWords.length === 0
+              ? "Añade productos a tu despensa para descubrir recetas"
+              : "No se encontraron recetas con tus ingredientes. Prueba a añadir más productos."
+          }
         />
       </SafeAreaView>
     );
@@ -387,7 +406,9 @@ export function RecipesScreen() {
 
                 <Text style={styles.mealTitle} numberOfLines={2}>{meal.strMeal}</Text>
                 {meal.strCategory ? (
-                  <Text style={styles.category}>{meal.strCategory}</Text>
+                  <Text style={styles.category}>
+                    {CATEGORY_ES[meal.strCategory] ?? meal.strCategory}
+                  </Text>
                 ) : null}
 
                 {/* Barra de coincidencia */}
@@ -402,11 +423,11 @@ export function RecipesScreen() {
 
                 {/* Badges de ingredientes */}
                 <View style={styles.ingredientsRow}>
-                  {meal.ingredients.slice(0, 7).map((ing) => {
+                  {meal.ingredients.slice(0, 7).map((ing, idx) => {
                     const ok = hasIngredient(ing);
                     return (
                       <View
-                        key={ing}
+                        key={`${ing}-${idx}`}
                         style={[styles.ingredientBadge, ok ? styles.ingredientOk : styles.ingredientMissing]}
                       >
                         <MaterialCommunityIcons
@@ -415,7 +436,7 @@ export function RecipesScreen() {
                           color={ok ? colors.white : colors.subtext}
                         />
                         <Text style={[styles.ingredientText, ok && { color: colors.white }]} numberOfLines={1}>
-                          {ing}
+                          {translateIngredient(ing)}
                         </Text>
                       </View>
                     );

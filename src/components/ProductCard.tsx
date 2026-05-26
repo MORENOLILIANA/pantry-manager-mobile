@@ -1,9 +1,11 @@
-import { StyleSheet, Text, View, Pressable } from "react-native";
+import { StyleSheet, Text, View, Pressable, Image } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, borderRadius, typography, shadows } from "@/config/theme";
 import { StatusBadge } from "@/components/StatusBadge";
 
 type Status = "normal" | "proximo" | "caducado";
+
+const IMAGE_SIZE = 64;
 
 type Props = {
   name: string;
@@ -13,15 +15,30 @@ type Props = {
   location: string;
   expiryDate?: string;
   status?: Status;
+  imageUrl?: string;
   onEdit?: () => void;
   onDelete?: () => void;
 };
 
-export function ProductCard({ name, brand, quantity, unit, expiryDate, location, status, onEdit, onDelete }: Props) {
+export function ProductCard({
+  name,
+  brand,
+  quantity,
+  unit,
+  expiryDate,
+  location,
+  status,
+  imageUrl,
+  onEdit,
+  onDelete,
+}: Props) {
   const formatDate = (date: string) => {
     try {
-      const d = new Date(date);
-      return d.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "2-digit" });
+      return new Date(date).toLocaleDateString("es-ES", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "2-digit",
+      });
     } catch {
       return date;
     }
@@ -29,40 +46,92 @@ export function ProductCard({ name, brand, quantity, unit, expiryDate, location,
 
   return (
     <View style={[styles.card, shadows.sm]}>
-      <View style={styles.header}>
-        <View style={styles.titleSection}>
-          <Text style={styles.name}>{name}</Text>
-          {brand ? <Text style={styles.brand}>{brand}</Text> : null}
-          {status ? <StatusBadge status={status} /> : null}
-        </View>
-        <View style={styles.actions}>
-          {onEdit && (
-            <Pressable onPress={onEdit} style={styles.actionButton}>
-              <MaterialCommunityIcons name="pencil" size={18} color={colors.primary} />
-            </Pressable>
+      <View style={styles.mainRow}>
+        {/* Thumbnail */}
+        <View style={styles.imageWrap}>
+          {imageUrl ? (
+            <Image
+              source={{ uri: imageUrl }}
+              style={styles.productImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.imagePlaceholder}>
+              <MaterialCommunityIcons
+                name="package-variant"
+                size={28}
+                color={colors.subtext}
+              />
+            </View>
           )}
-          {onDelete && (
-            <Pressable onPress={onDelete} style={styles.actionButton}>
-              <MaterialCommunityIcons name="trash-can" size={18} color={colors.error} />
-            </Pressable>
-          )}
         </View>
-      </View>
 
-      <View style={styles.details}>
-        <View style={styles.detailRow}>
-          <MaterialCommunityIcons name="package-variant" size={16} color={colors.subtext} />
-          <Text style={styles.detailText}>
-            {quantity} {unit}
-          </Text>
-        </View>
-        <View style={styles.detailRow}>
-          <MaterialCommunityIcons name="calendar" size={16} color={colors.subtext} />
-          <Text style={styles.detailText}>{expiryDate ? formatDate(expiryDate) : "Sin fecha"}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <MaterialCommunityIcons name="map-marker" size={16} color={colors.subtext} />
-          <Text style={styles.detailText}>{location}</Text>
+        {/* Content */}
+        <View style={styles.body}>
+          <View style={styles.topRow}>
+            <View style={styles.titleArea}>
+              <Text style={styles.name} numberOfLines={1}>
+                {name}
+              </Text>
+              {brand ? (
+                <Text style={styles.brand} numberOfLines={1}>
+                  {brand}
+                </Text>
+              ) : null}
+              {status ? <StatusBadge status={status} /> : null}
+            </View>
+            <View style={styles.actions}>
+              {onEdit && (
+                <Pressable onPress={onEdit} style={styles.actionButton} hitSlop={6}>
+                  <MaterialCommunityIcons
+                    name="pencil"
+                    size={18}
+                    color={colors.primary}
+                  />
+                </Pressable>
+              )}
+              {onDelete && (
+                <Pressable onPress={onDelete} style={styles.actionButton} hitSlop={6}>
+                  <MaterialCommunityIcons
+                    name="trash-can"
+                    size={18}
+                    color={colors.error}
+                  />
+                </Pressable>
+              )}
+            </View>
+          </View>
+
+          <View style={styles.details}>
+            <View style={styles.detailRow}>
+              <MaterialCommunityIcons
+                name="package-variant"
+                size={13}
+                color={colors.subtext}
+              />
+              <Text style={styles.detailText}>
+                {quantity} {unit}
+              </Text>
+            </View>
+            <View style={styles.detailRow}>
+              <MaterialCommunityIcons
+                name="calendar"
+                size={13}
+                color={colors.subtext}
+              />
+              <Text style={styles.detailText}>
+                {expiryDate ? formatDate(expiryDate) : "Sin fecha"}
+              </Text>
+            </View>
+            <View style={styles.detailRow}>
+              <MaterialCommunityIcons
+                name="map-marker"
+                size={13}
+                color={colors.subtext}
+              />
+              <Text style={styles.detailText}>{location}</Text>
+            </View>
+          </View>
         </View>
       </View>
     </View>
@@ -73,20 +142,48 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.white,
     borderRadius: borderRadius.md,
-    padding: spacing.lg,
+    padding: spacing.md,
     marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  header: {
+  mainRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+  },
+  imageWrap: {
+    width: IMAGE_SIZE,
+    height: IMAGE_SIZE,
+    borderRadius: borderRadius.sm,
+    overflow: "hidden",
+    flexShrink: 0,
+    alignSelf: "center",
+  },
+  productImage: {
+    width: IMAGE_SIZE,
+    height: IMAGE_SIZE,
+  },
+  imagePlaceholder: {
+    width: IMAGE_SIZE,
+    height: IMAGE_SIZE,
+    backgroundColor: colors.secondary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  body: {
+    flex: 1,
+    minWidth: 0,
+  },
+  topRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
-  titleSection: {
+  titleArea: {
     flex: 1,
-    marginRight: spacing.md,
+    marginRight: spacing.sm,
+    minWidth: 0,
   },
   name: {
     ...typography.body,
@@ -101,18 +198,18 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: "row",
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   actionButton: {
     padding: spacing.xs,
   },
   details: {
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   detailRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   detailText: {
     ...typography.bodySm,

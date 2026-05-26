@@ -6,6 +6,7 @@ export interface Product {
   brand?: string;
   category?: string;
   barcode?: string;
+  image_url?: string;
 }
 
 export interface PantryItem {
@@ -25,8 +26,17 @@ export interface Pantry {
   name: string;
   description?: string;
   items?: PantryItem[];
+  user_id?: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface PantryMember {
+  id: number;
+  name: string;
+  email: string;
+  role: "owner" | "member";
+  joined_at?: string;
 }
 
 export interface CreatePantryData {
@@ -36,6 +46,7 @@ export interface CreatePantryData {
 
 export interface AddItemData {
   product_id?: string;
+  product_barcode?: string;
   quantity: number;
   unit: string;
   expiry_date: string;
@@ -84,6 +95,21 @@ export async function getPantry(id: string): Promise<Pantry> {
 export async function createPantry(data: CreatePantryData): Promise<Pantry> {
   const response = await apiClient.post<any>("/pantries", data);
   return response.data?.data ?? response.data;
+}
+
+/**
+ * Actualiza el nombre/descripción de una despensa
+ */
+export async function updatePantry(id: string, data: CreatePantryData): Promise<Pantry> {
+  const response = await apiClient.put<any>(`/pantries/${id}`, data);
+  return response.data?.data ?? response.data;
+}
+
+/**
+ * Elimina una despensa
+ */
+export async function deletePantry(id: string): Promise<void> {
+  await apiClient.delete(`/pantries/${id}`);
 }
 
 /**
@@ -136,11 +162,27 @@ export async function getNotifications(pantryId: string): Promise<Notification[]
 }
 
 /**
+ * Obtiene los miembros de una despensa compartida
+ */
+export async function getPantryMembers(pantryId: string): Promise<PantryMember[]> {
+  try {
+    const response = await apiClient.get<any>(`/pantries/${pantryId}/members`);
+    return response.data?.data ?? response.data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Genera un token de invitación para compartir la despensa
  */
 export async function sharePantry(pantryId: string): Promise<{ token: string; share_url?: string }> {
   const response = await apiClient.post<any>(`/pantries/${pantryId}/share`);
-  return response.data?.data ?? response.data;
+  const data = response.data?.data ?? response.data;
+  return {
+    token: data.token ?? data.shared_token ?? data.share_url ?? "",
+    share_url: data.share_url,
+  };
 }
 
 /**

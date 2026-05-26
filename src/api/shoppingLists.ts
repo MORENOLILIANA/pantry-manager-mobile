@@ -114,6 +114,21 @@ export async function unmarkPurchased(
 }
 
 /**
+ * Actualiza un item de la lista de la compra
+ */
+export async function updateItem(
+  listId: string,
+  itemId: string,
+  data: Partial<AddShoppingItemData>
+): Promise<ShoppingListItem> {
+  const response = await apiClient.put<{ data: ShoppingListItem }>(
+    `/shopping-lists/${listId}/items/${itemId}`,
+    data
+  );
+  return response.data.data;
+}
+
+/**
  * Elimina un item de la lista de la compra
  */
 export async function deleteItem(

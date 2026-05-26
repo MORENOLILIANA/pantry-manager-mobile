@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Modal,
+  Image,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -18,6 +19,7 @@ import type { RouteProp } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useForm, Controller } from "react-hook-form";
+import * as ImagePicker from "expo-image-picker";
 import { colors, spacing, borderRadius, typography, shadows } from "@/config/theme";
 import type { PantriesStackParamList } from "@/navigation/stacks/AppStack";
 import { InputField } from "@/components/InputField";
@@ -30,11 +32,27 @@ import {
   type AddItemData,
   type UpdateItemData,
 } from "@/api/pantries";
+import { saveProductImage, getProductImage } from "@/services/productImages";
 
 type Navigation = NativeStackNavigationProp<PantriesStackParamList>;
+
 type Route = RouteProp<PantriesStackParamList, "Products">;
 
 const UNIT_OPTIONS = ["unidades", "kg", "g", "litros", "ml"];
+
+function estimateExpiryFromCategory(category?: string): Date {
+  const addDays = (d: number) => new Date(Date.now() + d * 86400000);
+  const cat = (category || "").toLowerCase();
+  if (/fresc|verdur|fruta|hortaliz|fresh|produce|vegetal/.test(cat)) return addDays(7);
+  if (/carne|pollo|ternera|cerdo|meat|fish|pescado|marisco|seafood/.test(cat)) return addDays(3);
+  if (/pan|bollería|pastel|bread|bakery|biscuit|galleta/.test(cat)) return addDays(7);
+  if (/lácteo|leche|yogur|queso|nata|dairy|milk|cream/.test(cat)) return addDays(14);
+  if (/congelado|frozen/.test(cat)) return addDays(180);
+  if (/conserva|lata|bote|canned|preserv|encurtido/.test(cat)) return addDays(730);
+  if (/bebida|refresco|zumo|drink|juice|beverage|agua|water/.test(cat)) return addDays(365);
+  if (/palomita|snack|chips|aperitivo/.test(cat)) return addDays(180);
+  return addDays(365);
+}
 
 const LOCATION_OPTIONS = [
   { label: "Nevera", value: "refrigerator" },
@@ -63,15 +81,16 @@ export function ProductsScreen() {
 
   const { control, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormData>({
     defaultValues: {
-      productName:
-        barcodeData?.name || item?.product.name || "",
-      productBrand:
-        barcodeData?.brand || item?.product.brand || "",
-      productCategory:
-        barcodeData?.category || item?.product.category || "",
+      productName: barcodeData?.name || item?.product.name || "",
+      productBrand: barcodeData?.brand || item?.product.brand || "",
+      productCategory: barcodeData?.category || item?.product.category || "",
       quantity: item?.quantity.toString() || "1",
       unit: item?.unit || "unidades",
-      expiryDate: item?.expiry_date ? new Date(item.expiry_date) : new Date(),
+      expiryDate: item?.expiry_date
+        ? new Date(item.expiry_date)
+        : barcodeData?.category
+        ? estimateExpiryFromCategory(barcodeData.category)
+        : new Date(),
       location: item?.location || "pantry",
       notes: item?.notes || "",
     },
@@ -80,6 +99,10 @@ export function ProductsScreen() {
   const [loading, setLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [tempDate, setTempDate] = useState(new Date());
+  const [localImageUri, setLocalImageUri] = useState<string | null>(
+    item?.product.image_url || null
+  );
+
   const selectedUnit = watch("unit");
   const selectedLocation = watch("location");
   const expiryDate = watch("expiryDate");
@@ -89,17 +112,72 @@ export function ProductsScreen() {
   // Pre-rellenar si viene de BarcodeScan
   useEffect(() => {
     if (barcodeData) {
-      if (barcodeData.name) {
-        setValue("productName", barcodeData.name);
-      }
-      if (barcodeData.brand) {
-        setValue("productBrand", barcodeData.brand);
-      }
+      if (barcodeData.name) setValue("productName", barcodeData.name);
+      if (barcodeData.brand) setValue("productBrand", barcodeData.brand);
       if (barcodeData.category) {
         setValue("productCategory", barcodeData.category);
+        setValue("expiryDate", estimateExpiryFromCategory(barcodeData.category));
       }
     }
   }, [barcodeData, setValue]);
+
+  // Cargar imagen local guardada (tiene prioridad sobre image_url del backend)
+  useEffect(() => {
+    if (item?.product.id) {
+      getProductImage(item.product.id)
+        .then((uri) => { if (uri) setLocalImageUri(uri); })
+        .catch(() => {});
+    }
+  }, [item?.product.id]);
+
+  // ─── Image picker ────────────────────────────────────────────────────────────
+
+  const handlePickImage = () => {
+    Alert.alert(
+      "Añadir foto del producto",
+      "¿Cómo quieres añadir la imagen?",
+      [
+        { text: "Galería", onPress: pickFromLibrary },
+        { text: "Cámara", onPress: pickFromCamera },
+        { text: "Cancelar", style: "cancel" },
+      ]
+    );
+  };
+
+  const pickFromLibrary = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permisos requeridos", "Necesitamos acceso a tu galería para elegir una foto.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.75,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setLocalImageUri(result.assets[0].uri);
+    }
+  };
+
+  const pickFromCamera = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permisos requeridos", "Necesitamos acceso a la cámara para hacer una foto.");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.75,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setLocalImageUri(result.assets[0].uri);
+    }
+  };
+
+  // ─── Date picker ─────────────────────────────────────────────────────────────
 
   const openDatePicker = () => {
     setTempDate(toDate(expiryDate));
@@ -109,21 +187,18 @@ export function ProductsScreen() {
   const handleDateChange = (event: any, date?: Date) => {
     if (Platform.OS === "android") {
       setShowDatePicker(false);
-      if (event?.type === "set" && date) {
-        setValue("expiryDate", date);
-      }
+      if (event?.type === "set" && date) setValue("expiryDate", date);
       return;
     }
-
-    if (date) {
-      setTempDate(date);
-    }
+    if (date) setTempDate(date);
   };
 
   const confirmIOSDate = () => {
     setValue("expiryDate", tempDate);
     setShowDatePicker(false);
   };
+
+  // ─── Submit ──────────────────────────────────────────────────────────────────
 
   const onSubmit = async (data: FormData) => {
     try {
@@ -133,19 +208,30 @@ export function ProductsScreen() {
         product_name: data.productName,
         product_brand: data.productBrand || undefined,
         product_category: data.productCategory || undefined,
+        product_barcode: barcodeData?.barcode || undefined,
         quantity: parseFloat(data.quantity) || 1,
         unit: data.unit,
-        expiry_date: data.expiryDate.toISOString().split("T")[0], // YYYY-MM-DD
+        expiry_date: (() => {
+          const d = data.expiryDate;
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        })(),
         location: data.location,
         notes: data.notes || undefined,
       };
 
+      let savedProductId: string | undefined;
+
       if (mode === "add") {
-        await addItem(pantryId, itemData);
-        Alert.alert("Éxito", "Producto añadido a la despensa");
+        const result = await addItem(pantryId, itemData);
+        savedProductId = result.product.id;
       } else if (mode === "edit" && itemId) {
-        await updateItem(pantryId, itemId, itemData);
-        Alert.alert("Éxito", "Producto actualizado");
+        const result = await updateItem(pantryId, itemId, itemData);
+        savedProductId = result.product.id;
+      }
+
+      // Guardar imagen local si se eligió una
+      if (localImageUri && savedProductId) {
+        await saveProductImage(savedProductId, localImageUri).catch(() => {});
       }
 
       navigation.goBack();
@@ -167,35 +253,31 @@ export function ProductsScreen() {
 
   const handleDeleteItem = () => {
     if (mode !== "edit" || !itemId) return;
-
     Alert.alert(
       "Eliminar producto",
-      `¿Estás seguro de que deseas eliminar este producto?`,
+      "¿Estás seguro de que deseas eliminar este producto?",
       [
-        { text: "Cancelar", onPress: () => {} },
+        { text: "Cancelar", style: "cancel" },
         {
           text: "Eliminar",
+          style: "destructive",
           onPress: async () => {
             try {
               setLoading(true);
               await deleteItemApi(pantryId, itemId);
-              Alert.alert("Éxito", "Producto eliminado");
               navigation.goBack();
-            } catch (error) {
-              console.error("Error deleting item:", error);
+            } catch {
               Alert.alert("Error", "No se pudo eliminar el producto");
             } finally {
               setLoading(false);
             }
           },
-          style: "destructive",
         },
       ]
     );
   };
 
   const navigateToBarcodeScan = () => {
-    // Navegar a BarcodeScan pasando que regrese a Products
     navigation.navigate("BarcodeScan", { pantryId });
   };
 
@@ -208,11 +290,7 @@ export function ProductsScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Pressable onPress={() => navigation.goBack()}>
-            <MaterialCommunityIcons
-              name="chevron-left"
-              size={28}
-              color={colors.primary}
-            />
+            <MaterialCommunityIcons name="chevron-left" size={28} color={colors.primary} />
           </Pressable>
           <Text style={styles.headerTitle}>
             {mode === "add" ? "Añadir producto" : "Editar producto"}
@@ -220,8 +298,30 @@ export function ProductsScreen() {
           <View style={{ width: 28 }} />
         </View>
 
-        {/* Formulario */}
         <ScrollView style={styles.form} showsVerticalScrollIndicator={false}>
+
+          {/* Foto del producto */}
+          <View style={styles.imageSection}>
+            <Pressable onPress={handlePickImage} style={styles.imageButton}>
+              {localImageUri ? (
+                <Image
+                  source={{ uri: localImageUri }}
+                  style={styles.imagePreview}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.imagePlaceholder}>
+                  <MaterialCommunityIcons name="image-plus" size={40} color={colors.subtext} />
+                  <Text style={styles.imagePlaceholderText}>Añadir foto</Text>
+                </View>
+              )}
+              {/* Badge cámara */}
+              <View style={styles.cameraOverlay}>
+                <MaterialCommunityIcons name="camera" size={16} color={colors.white} />
+              </View>
+            </Pressable>
+          </View>
+
           {/* Nombre del producto */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Nombre del producto</Text>
@@ -241,15 +341,8 @@ export function ProductsScreen() {
                   />
                 )}
               />
-              <Pressable
-                onPress={navigateToBarcodeScan}
-                style={styles.barcodeButton}
-              >
-                <MaterialCommunityIcons
-                  name="barcode"
-                  size={22}
-                  color={colors.primary}
-                />
+              <Pressable onPress={navigateToBarcodeScan} style={styles.barcodeButton}>
+                <MaterialCommunityIcons name="barcode" size={22} color={colors.primary} />
               </Pressable>
             </View>
           </View>
@@ -291,7 +384,7 @@ export function ProductsScreen() {
               name="quantity"
               rules={{
                 required: "La cantidad es obligatoria.",
-                validate: (v) => parseFloat(v) > 0 || "La cantidad debe ser mayor que 0."
+                validate: (v) => parseFloat(v) > 0 || "La cantidad debe ser mayor que 0.",
               }}
               render={({ field: { value, onChange } }) => (
                 <InputField
@@ -323,15 +416,8 @@ export function ProductsScreen() {
           {/* Fecha de caducidad */}
           <View style={styles.section}>
             <Text style={styles.fieldLabel}>Fecha de caducidad</Text>
-            <Pressable
-              onPress={openDatePicker}
-              style={[styles.dateButton, shadows.sm]}
-            >
-              <MaterialCommunityIcons
-                name="calendar"
-                size={20}
-                color={colors.primary}
-              />
+            <Pressable onPress={openDatePicker} style={[styles.dateButton, shadows.sm]}>
+              <MaterialCommunityIcons name="calendar" size={20} color={colors.primary} />
               <Text style={styles.dateButtonText}>
                 {toDate(expiryDate).toLocaleDateString("es-ES")}
               </Text>
@@ -409,7 +495,6 @@ export function ProductsScreen() {
             />
           </View>
 
-          {/* Espaciador */}
           <View style={styles.spacer} />
         </ScrollView>
 
@@ -437,6 +522,8 @@ export function ProductsScreen() {
   );
 }
 
+const IMAGE_SIZE = 140;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -452,7 +539,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E5E5",
+    borderBottomColor: colors.border,
   },
   headerTitle: {
     ...typography.h2,
@@ -461,8 +548,53 @@ const styles = StyleSheet.create({
   form: {
     flex: 1,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
+    paddingTop: spacing.lg,
   },
+  // ─── Image ───────────────────────────────────────────────────────────────────
+  imageSection: {
+    alignItems: "center",
+    marginBottom: spacing.xl,
+  },
+  imageButton: {
+    width: IMAGE_SIZE,
+    height: IMAGE_SIZE,
+    borderRadius: borderRadius.lg,
+    overflow: "hidden",
+    position: "relative",
+  },
+  imagePreview: {
+    width: IMAGE_SIZE,
+    height: IMAGE_SIZE,
+  },
+  imagePlaceholder: {
+    width: IMAGE_SIZE,
+    height: IMAGE_SIZE,
+    backgroundColor: colors.secondary,
+    borderRadius: borderRadius.lg,
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderStyle: "dashed",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  imagePlaceholderText: {
+    ...typography.bodySm,
+    color: colors.subtext,
+    fontWeight: "600",
+  },
+  cameraOverlay: {
+    position: "absolute",
+    bottom: 8,
+    right: 8,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.primary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  // ─── Form fields ─────────────────────────────────────────────────────────────
   section: {
     marginBottom: spacing.lg,
   },
@@ -529,6 +661,7 @@ const styles = StyleSheet.create({
   spacer: {
     height: spacing.xl,
   },
+  // ─── Footer ──────────────────────────────────────────────────────────────────
   footer: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.lg,
@@ -540,6 +673,7 @@ const styles = StyleSheet.create({
   deleteButton: {
     marginBottom: spacing.sm,
   },
+  // ─── Date modal ──────────────────────────────────────────────────────────────
   dateModalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",
