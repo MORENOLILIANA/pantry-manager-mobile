@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -14,7 +14,9 @@ import {
   Keyboard,
   Modal,
 } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
+import type { RouteProp } from "@react-navigation/native";
+import type { ShoppingListStackParamList } from "@/navigation/stacks/AppStack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, borderRadius, typography, shadows } from "@/config/theme";
 import { EmptyState } from "@/components/EmptyState";
@@ -47,6 +49,8 @@ type EditState = {
 };
 
 export function ShoppingListsScreen() {
+  const navigation = useNavigation();
+  const route = useRoute<RouteProp<ShoppingListStackParamList, "ShoppingLists">>();
   const [list, setList] = useState<ShoppingList | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -56,6 +60,18 @@ export function ShoppingListsScreen() {
   const [saving, setSaving] = useState(false);
   const textInputRef = useRef<TextInput>(null);
   const initialLoadDone = useRef(false);
+
+  // Recibe producto escaneado desde BarcodeScanScreen
+  useEffect(() => {
+    const params = route.params as any;
+    if (params?.scannedProduct !== undefined) {
+      if (params.scannedProduct?.name) {
+        setNewItemText(params.scannedProduct.name);
+      }
+      (navigation as any).setParams({ scannedProduct: undefined });
+      setTimeout(() => textInputRef.current?.focus(), 300);
+    }
+  }, [route.params]);
 
   const loadShoppingList = async (silent = false) => {
     try {
@@ -398,11 +414,21 @@ export function ShoppingListsScreen() {
 
       {/* Add input */}
       <View style={styles.inputContainer}>
-        <View style={[styles.inputBox, shadows.sm]}>
+        <View style={[styles.inputRow, shadows.sm]}>
+          <Pressable
+            onPress={() => (navigation as any).navigate("PantriesStack", {
+              screen: "BarcodeScan",
+              params: { shoppingListMode: true },
+            })}
+            style={styles.scanIconBtn}
+            hitSlop={8}
+          >
+            <MaterialCommunityIcons name="barcode-scan" size={22} color={colors.primary} />
+          </Pressable>
           <TextInput
             ref={textInputRef}
             style={styles.input}
-            placeholder="Añadir producto..."
+            placeholder="Escribe un producto..."
             placeholderTextColor={colors.subtext}
             value={newItemText}
             onChangeText={setNewItemText}
@@ -410,18 +436,21 @@ export function ShoppingListsScreen() {
             editable={!addingItem}
             returnKeyType="done"
           />
-          <Pressable
-            onPress={handleAddItem}
-            disabled={addingItem || !newItemText.trim()}
-            style={[styles.addButton, (!newItemText.trim() || addingItem) && styles.addButtonDisabled]}
-          >
-            {addingItem ? (
-              <ActivityIndicator size="small" color={colors.white} />
-            ) : (
-              <MaterialCommunityIcons name="plus" size={24} color={colors.white} />
-            )}
-          </Pressable>
         </View>
+        <Pressable
+          onPress={handleAddItem}
+          disabled={addingItem || !newItemText.trim()}
+          style={[styles.addButton, (!newItemText.trim() || addingItem) && styles.addButtonDisabled]}
+        >
+          {addingItem ? (
+            <ActivityIndicator size="small" color={colors.white} />
+          ) : (
+            <MaterialCommunityIcons name="plus" size={20} color={colors.white} style={{ marginRight: 6 }} />
+          )}
+          <Text style={styles.addButtonText}>
+            {addingItem ? "Añadiendo..." : "Añadir a la lista"}
+          </Text>
+        </Pressable>
       </View>
       </KeyboardAvoidingView>
 
@@ -660,30 +689,40 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     backgroundColor: colors.white,
   },
-  inputBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
   input: {
     flex: 1,
     ...typography.body,
     color: colors.text,
     paddingVertical: spacing.sm,
   },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.secondary,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.sm,
+  },
+  scanIconBtn: {
+    paddingHorizontal: spacing.xs,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   addButton: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.sm,
+    flexDirection: "row",
+    height: 48,
+    borderRadius: borderRadius.md,
     backgroundColor: colors.primary,
     justifyContent: "center",
     alignItems: "center",
+  },
+  addButtonText: {
+    ...typography.body,
+    color: colors.white,
+    fontWeight: "700",
   },
   addButtonDisabled: {
     backgroundColor: colors.disabled,

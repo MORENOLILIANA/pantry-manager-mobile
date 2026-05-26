@@ -45,15 +45,26 @@ export async function logout() {
 	await apiClient.post("/auth/logout");
 }
 
+export async function resetPassword(payload: {
+	email: string;
+	token: string;
+	password: string;
+	password_confirmation: string;
+}): Promise<void> {
+	await apiClient.post("/auth/reset-password", payload);
+}
+
 export async function forgotPassword(email: string): Promise<{ exists: boolean; message: string }> {
 	try {
 		const { data } = await apiClient.post<any>("/auth/forgot-password", { email });
 		const body = data?.data ?? data;
+		if (body?.success === false) {
+			return { exists: false, message: body?.message ?? "No existe ninguna cuenta con ese correo electrónico." };
+		}
 		return { exists: true, message: body?.message ?? "Te hemos enviado un correo con las instrucciones." };
 	} catch (err: any) {
 		const status = err?.response?.status;
-		const msg = err?.response?.data?.message;
-		if (status === 404 || (status === 422 && msg?.toLowerCase().includes("email"))) {
+		if (status === 404) {
 			return { exists: false, message: "No existe ninguna cuenta con ese correo electrónico." };
 		}
 		throw err;

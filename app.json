@@ -2,7 +2,7 @@
   "expo": {
     "name": "Pantry Manager Mobile",
     "slug": "pantry-manager-mobile",
-    "scheme": "pantrymanager",
+    "scheme": "nutricasa",
     "version": "0.1.0",
     "orientation": "portrait",
     "platforms": [

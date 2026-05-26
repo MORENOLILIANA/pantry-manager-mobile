@@ -16,6 +16,7 @@ type Props = {
   expiryDate?: string;
   status?: Status;
   imageUrl?: string;
+  addedBy?: string;
   onEdit?: () => void;
   onDelete?: () => void;
 };
@@ -29,6 +30,7 @@ export function ProductCard({
   location,
   status,
   imageUrl,
+  addedBy,
   onEdit,
   onDelete,
 }: Props) {
@@ -131,6 +133,16 @@ export function ProductCard({
               />
               <Text style={styles.detailText}>{location}</Text>
             </View>
+            {addedBy ? (
+              <View style={styles.detailRow}>
+                <MaterialCommunityIcons
+                  name="account-outline"
+                  size={13}
+                  color={colors.subtext}
+                />
+                <Text style={styles.detailText}>{addedBy}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
       </View>

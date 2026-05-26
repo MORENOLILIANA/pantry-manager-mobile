@@ -95,8 +95,24 @@ export function BarcodeScanScreen() {
     }, [])
   );
 
-  // Navega a Products usando siempre navegación cruzada (funciona desde tab y desde stack)
+  // Navega a Products o a ShoppingLists según el modo
   const goToProducts = (params: Record<string, any>) => {
+    const shoppingListMode = (route.params as any)?.shoppingListMode;
+
+    if (shoppingListMode) {
+      (navigation as any).navigate("ShoppingListStack", {
+        screen: "ShoppingLists",
+        params: {
+          scannedProduct: {
+            name: params.barcodeData?.name || "",
+            brand: params.barcodeData?.brand || "",
+          },
+        },
+      });
+      setLoading(false);
+      return;
+    }
+
     if (!resolvedPantryId) {
       Alert.alert("Sin despensa", "Crea primero una despensa desde la sección Mi Despensa.");
       isProcessing.current = false;
@@ -135,7 +151,9 @@ export function BarcodeScanScreen() {
           return;
         }
       } catch (err: any) {
-        if (err?.response?.status !== 404) throw err;
+        // Solo relanzar si es un error de red (sin respuesta del servidor)
+        // Cualquier respuesta HTTP (404, 500, etc.) = no encontrado → continuar
+        if (!err?.response) throw err;
       }
 
       // 2) Endpoint nutricional del backend (si el backend consulta OpenFoodFacts por su lado)
@@ -159,9 +177,12 @@ export function BarcodeScanScreen() {
       }
 
       // 4) Producto desconocido → el usuario rellena manualmente
+      const shoppingListMode = (route.params as any)?.shoppingListMode;
       Alert.alert(
         "Producto no encontrado",
-        "No se encontró este código en ninguna base de datos. Puedes rellenar los datos manualmente.",
+        shoppingListMode
+          ? "No se encontró este código. Escribe el nombre del producto en la lista."
+          : "No se encontró este código en ninguna base de datos. Puedes rellenar los datos manualmente.",
         [
           {
             text: "Cancelar",
@@ -173,7 +194,7 @@ export function BarcodeScanScreen() {
             style: "cancel",
           },
           {
-            text: "Añadir manualmente",
+            text: shoppingListMode ? "Escribir nombre" : "Añadir manualmente",
             onPress: () => {
               goToProducts({ mode: "add", barcodeData: { barcode, name: "", brand: "", category: "" } });
             },

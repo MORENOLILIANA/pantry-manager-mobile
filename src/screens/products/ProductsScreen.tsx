@@ -79,7 +79,7 @@ export function ProductsScreen() {
   const params = (route.params as any) || {};
   const { pantryId, mode = "add", item, itemId, barcodeData } = params;
 
-  const { control, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormData>({
+  const { control, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<FormData>({
     defaultValues: {
       productName: barcodeData?.name || item?.product.name || "",
       productBrand: barcodeData?.brand || item?.product.brand || "",
@@ -109,17 +109,23 @@ export function ProductsScreen() {
 
   const toDate = (d: any) => (d instanceof Date ? d : d ? new Date(d) : new Date());
 
-  // Pre-rellenar si viene de BarcodeScan
+  // Pre-rellenar si viene de BarcodeScan — reset completo para evitar datos del scan anterior
   useEffect(() => {
-    if (barcodeData) {
-      if (barcodeData.name) setValue("productName", barcodeData.name);
-      if (barcodeData.brand) setValue("productBrand", barcodeData.brand);
-      if (barcodeData.category) {
-        setValue("productCategory", barcodeData.category);
-        setValue("expiryDate", estimateExpiryFromCategory(barcodeData.category));
-      }
-    }
-  }, [barcodeData, setValue]);
+    if (!barcodeData) return;
+    reset({
+      productName: barcodeData.name || "",
+      productBrand: barcodeData.brand || "",
+      productCategory: barcodeData.category || "",
+      quantity: "1",
+      unit: "unidades",
+      expiryDate: barcodeData.category
+        ? estimateExpiryFromCategory(barcodeData.category)
+        : new Date(),
+      location: "pantry",
+      notes: "",
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [barcodeData?.barcode]);
 
   // Cargar imagen local guardada (tiene prioridad sobre image_url del backend)
   useEffect(() => {
@@ -234,7 +240,7 @@ export function ProductsScreen() {
         await saveProductImage(savedProductId, localImageUri).catch(() => {});
       }
 
-      navigation.goBack();
+      navigation.navigate("Pantries");
     } catch (error: any) {
       console.error("Error saving item:", error);
       const serverErrors = error?.response?.data?.errors;
@@ -265,7 +271,7 @@ export function ProductsScreen() {
             try {
               setLoading(true);
               await deleteItemApi(pantryId, itemId);
-              navigation.goBack();
+              navigation.navigate("Pantries");
             } catch {
               Alert.alert("Error", "No se pudo eliminar el producto");
             } finally {

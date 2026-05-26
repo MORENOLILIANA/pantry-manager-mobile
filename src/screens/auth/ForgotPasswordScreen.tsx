@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { ScrollView, StyleSheet, Text, View, SafeAreaView, Pressable, KeyboardAvoidingView, Platform } from "react-native";
 import { useNavigation } from "@react-navigation/native";
@@ -25,15 +25,34 @@ export function ForgotPasswordScreen() {
   const [sent, setSent] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastEmailRef = useRef<string>("");
+
+  useEffect(() => {
+    return () => { if (cooldownRef.current) clearInterval(cooldownRef.current); };
+  }, []);
+
+  function startCooldown() {
+    setResendCooldown(60);
+    cooldownRef.current = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) { clearInterval(cooldownRef.current!); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  }
 
   async function onSubmit(values: FormValues) {
     try {
       setApiError(null);
       setNotFound(false);
       setLoading(true);
-      const result = await forgotPassword(values.email.trim());
+      lastEmailRef.current = values.email.trim();
+      const result = await forgotPassword(lastEmailRef.current);
       if (result.exists) {
         setSent(true);
+        startCooldown();
       } else {
         setNotFound(true);
         setApiError(result.message);
@@ -41,6 +60,19 @@ export function ForgotPasswordScreen() {
     } catch (error: any) {
       const msg = error?.response?.data?.message ?? "No se pudo enviar el email. Inténtalo de nuevo.";
       setApiError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    if (resendCooldown > 0 || !lastEmailRef.current) return;
+    try {
+      setLoading(true);
+      await forgotPassword(lastEmailRef.current);
+      startCooldown();
+    } catch {
+      // silencioso — el usuario ya ve la pantalla de éxito
     } finally {
       setLoading(false);
     }
@@ -54,12 +86,41 @@ export function ForgotPasswordScreen() {
             <MaterialCommunityIcons name="arrow-left" size={24} color={colors.primary} />
           </Pressable>
           <View style={styles.successSection}>
-            <MaterialCommunityIcons name="check-circle" size={80} color={colors.success} style={styles.successIcon} />
+            <MaterialCommunityIcons name="email-check-outline" size={80} color={colors.success} style={styles.successIcon} />
             <Text style={styles.successTitle}>Correo enviado</Text>
-            <Text style={styles.successSubtitle}>Hemos enviado instrucciones a tu correo para recuperar tu contraseña.</Text>
-            <Text style={styles.successText}>Revisa tu bandeja de entrada y sigue los pasos.</Text>
+            <Text style={styles.successSubtitle}>
+              Hemos enviado las instrucciones a{"\n"}
+              <Text style={styles.successEmail}>{lastEmailRef.current}</Text>
+            </Text>
           </View>
-          <PrimaryButton title="Volver al login" onPress={() => navigation.navigate("Login")} style={styles.submitButton} />
+
+          <View style={styles.spamBox}>
+            <MaterialCommunityIcons name="alert-circle-outline" size={18} color={colors.subtext} />
+            <Text style={styles.spamText}>
+              ¿No lo ves? Revisa la carpeta de <Text style={styles.spamBold}>spam o correo no deseado</Text>.
+              El correo puede tardar unos minutos.
+            </Text>
+          </View>
+
+          <PrimaryButton
+            title="Tengo el código, cambiar contraseña"
+            onPress={() => navigation.navigate("ResetPassword", { token: "", email: lastEmailRef.current })}
+            style={styles.submitButton}
+          />
+
+          <Pressable onPress={() => navigation.navigate("Login")} style={styles.resendLink}>
+            <Text style={styles.resendText}>Volver al login</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={handleResend}
+            disabled={resendCooldown > 0 || loading}
+            style={styles.resendLink}
+          >
+            <Text style={[styles.resendText, resendCooldown > 0 && styles.resendTextDisabled]}>
+              {resendCooldown > 0 ? `Reenviar en ${resendCooldown}s` : "No me ha llegado, reenviar"}
+            </Text>
+          </Pressable>
         </ScrollView>
       </SafeAreaView>
     );
@@ -80,7 +141,7 @@ export function ForgotPasswordScreen() {
           <Text style={styles.subtitle}>Ingresa tu email y te enviaremos instrucciones para recuperar tu contraseña.</Text>
         </View>
         <View style={styles.formSection}>
-          <Controller control={control} name="email" rules={{ required: "El email es requerido", pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: "Email inválido" } }} render={({ field: { onChange, onBlur, value } }) => (<InputField label="Email" placeholder="tu@email.com" icon="email" value={value} onChangeText={onChange} onBlur={onBlur} keyboardType="email-address" error={errors.email?.message} />)} />
+          <Controller control={control} name="email" rules={{ required: "El email es requerido", pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: "Email inválido" } }} render={({ field: { onChange, onBlur, value } }) => (<InputField label="Email" placeholder="tu@email.com" icon="email" value={value} onChangeText={(text) => { onChange(text); if (notFound) { setNotFound(false); setApiError(null); } }} onBlur={onBlur} keyboardType="email-address" error={errors.email?.message} />)} />
           {apiError && (
             <View style={[styles.errorBox, notFound && styles.notFoundBox]}>
               <MaterialCommunityIcons
@@ -92,7 +153,9 @@ export function ForgotPasswordScreen() {
             </View>
           )}
         </View>
-        <PrimaryButton title={loading ? "Enviando..." : "Enviar instrucciones"} onPress={handleSubmit(onSubmit)} style={styles.submitButton} />
+        {!notFound && (
+          <PrimaryButton title={loading ? "Enviando..." : "Enviar instrucciones"} onPress={handleSubmit(onSubmit)} style={styles.submitButton} />
+        )}
       </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -117,6 +180,20 @@ const styles = StyleSheet.create({
   successSection: { alignItems: "center", marginVertical: spacing.xxl },
   successIcon: { marginBottom: spacing.xl },
   successTitle: { ...typography.h2, color: colors.success, marginBottom: spacing.md },
-  successSubtitle: { ...typography.body, color: colors.text, textAlign: "center", marginBottom: spacing.md },
-  successText: { ...typography.bodySm, color: colors.subtext, textAlign: "center" },
+  successSubtitle: { ...typography.body, color: colors.subtext, textAlign: "center", marginBottom: spacing.sm },
+  successEmail: { ...typography.body, color: colors.text, fontWeight: "700" },
+  spamBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    backgroundColor: "#F5F5F5",
+    borderRadius: 8,
+    padding: spacing.md,
+    marginBottom: spacing.xxl,
+  },
+  spamText: { ...typography.bodySm, color: colors.subtext, flex: 1, lineHeight: 20 },
+  spamBold: { fontWeight: "700", color: colors.text },
+  resendLink: { alignItems: "center", paddingVertical: spacing.md },
+  resendText: { ...typography.bodySm, color: colors.primary, fontWeight: "600" },
+  resendTextDisabled: { color: colors.subtext },
 });

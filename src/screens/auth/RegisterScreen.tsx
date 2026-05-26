@@ -164,6 +164,9 @@ export function RegisterScreen() {
                   error={errors.password?.message}
                   style={styles.input}
                 />
+                {!errors.password && (
+                  <Text style={styles.hint}>Mínimo 8 caracteres</Text>
+                )}
               </View>
             )}
           />
@@ -284,6 +287,13 @@ const styles = StyleSheet.create({
   },
   input: {
     marginBottom: spacing.md,
+  },
+  hint: {
+    ...typography.caption,
+    color: colors.subtext,
+    marginTop: -spacing.sm,
+    marginBottom: spacing.sm,
+    marginLeft: spacing.xs,
   },
   errorBox: {
     flexDirection: "row",

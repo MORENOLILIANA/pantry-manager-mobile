@@ -19,6 +19,7 @@ export interface PantryItem {
   notes?: string;
   product: Product;
   created_at?: string;
+  added_by?: { id: number; name: string };
 }
 
 export interface Pantry {
@@ -167,8 +168,11 @@ export async function getNotifications(pantryId: string): Promise<Notification[]
 export async function getPantryMembers(pantryId: string): Promise<PantryMember[]> {
   try {
     const response = await apiClient.get<any>(`/pantries/${pantryId}/members`);
-    return response.data?.data ?? response.data ?? [];
-  } catch {
+    const data = response.data?.data ?? response.data ?? [];
+    console.log("[members] respuesta:", JSON.stringify(data));
+    return Array.isArray(data) ? data : [];
+  } catch (err: any) {
+    console.warn("[members] error:", err?.response?.status, err?.response?.data ?? err?.message);
     return [];
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import {
   StyleSheet,
   View,
@@ -7,6 +7,7 @@ import {
   SafeAreaView,
   Pressable,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { CompositeNavigationProp } from "@react-navigation/native";
@@ -18,7 +19,32 @@ import type { DashboardStackParamList, AppStackParamList } from "@/navigation/st
 import { StatCard } from "@/components/StatCard";
 import { fetchCurrentUser, type AuthUser } from "@/api/auth";
 import { getPantries, getPantry, getNotifications, type Pantry, type Notification } from "@/api/pantries";
-import { getShoppingLists, type ShoppingList } from "@/api/shoppingLists";
+import { getShoppingLists, getShoppingList, type ShoppingList } from "@/api/shoppingLists";
+import { OnboardingModal } from "@/components/OnboardingModal";
+import { getOnboardingDone, setOnboardingDone } from "@/services/storage";
+
+function getExpiryLabel(expiryDate: string): string {
+  const expiry = new Date(expiryDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  expiry.setHours(0, 0, 0, 0);
+  const diff = Math.round((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  if (diff < 0) return "Caducado";
+  if (diff === 0) return "Caduca hoy";
+  if (diff === 1) return "Caduca mañana";
+  return `En ${diff} días`;
+}
+
+function getExpiryColor(expiryDate: string): string {
+  const expiry = new Date(expiryDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  expiry.setHours(0, 0, 0, 0);
+  const diff = Math.round((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  if (diff <= 0) return "#E74C3C";
+  if (diff === 1) return "#E67E22";
+  return "#F39C12";
+}
 
 type Navigation = CompositeNavigationProp<
   NativeStackNavigationProp<DashboardStackParamList>,
@@ -42,11 +68,12 @@ export function DashboardScreen() {
     shoppingList: null,
   });
   const [loading, setLoading] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const initialLoadDone = useRef(false);
 
-  // Cargar datos al montar y cada vez que la pantalla se enfoca
-  const loadDashboardData = async () => {
+  const loadDashboardData = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
 
       // Hacer todas las llamadas en paralelo
       const [userData, pantriesData, shoppingListsData] = await Promise.all([
@@ -82,10 +109,12 @@ export function DashboardScreen() {
         ]);
       }
 
-      // Obtener lista activa de compras
-      const activeShoppingList = shoppingListsData?.find(
-        (l) => l.status === "active"
-      ) || null;
+      // Obtener lista activa con sus items
+      let activeShoppingList: ShoppingList | null = null;
+      const foundList = shoppingListsData?.find((l) => l.status === "active");
+      if (foundList) {
+        activeShoppingList = await getShoppingList(foundList.id).catch(() => ({ ...foundList, items: [] }));
+      }
 
       setData({
         user: userData,
@@ -93,28 +122,53 @@ export function DashboardScreen() {
         notifications: notificationsData,
         shoppingList: activeShoppingList,
       });
+
+      // Mostrar onboarding solo si es la primera vez y no tiene despensa
+      const done = await getOnboardingDone();
+      if (!done) {
+        if (!pantryData) {
+          setShowOnboarding(true);
+        } else {
+          // Ya tiene despensa, marcar como completado para no volver a mostrar
+          await setOnboardingDone();
+        }
+      }
     } catch (error) {
       console.error("Error loading dashboard data:", error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
-
   useFocusEffect(
     React.useCallback(() => {
-      loadDashboardData();
+      if (!initialLoadDone.current) {
+        initialLoadDone.current = true;
+        loadDashboardData(false);
+      } else {
+        loadDashboardData(true);
+      }
     }, [])
   );
 
   // Calcular métricas
   const totalItems = data.pantry?.items?.length || 0;
-  const expiringItems = data.notifications?.length || 0;
   const pendingItems =
     data.shoppingList?.items?.filter((i) => !i.purchased).length || 0;
+
+  // Productos próximos a caducar (hasta 2, dentro de 7 días)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expiringCards = (data.pantry?.items || [])
+    .filter((item) => {
+      if (!item.expiry_date) return false;
+      const exp = new Date(item.expiry_date);
+      exp.setHours(0, 0, 0, 0);
+      const diff = Math.round((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      return diff <= 7;
+    })
+    .sort((a, b) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime())
+    .slice(0, 2);
 
   // Últimos 5 items añadidos (ordenados por created_at descendente)
   const recentItems = (data.pantry?.items || [])
@@ -139,6 +193,15 @@ export function DashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <OnboardingModal
+        visible={showOnboarding}
+        navigation={navigation}
+        onDone={async () => {
+          setShowOnboarding(false);
+          await setOnboardingDone();
+          loadDashboardData();
+        }}
+      />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -164,44 +227,75 @@ export function DashboardScreen() {
           </Pressable>
         </View>
 
-        {/* Alert Card - Solo mostrar si hay notificaciones */}
-        {expiringItems > 0 && (
-          <View style={[styles.alertCard, shadows.sm]}>
-            <View style={styles.alertIcon}>
-              <MaterialCommunityIcons
-                name="alert-circle"
-                size={28}
-                color="#F39C12"
-              />
-            </View>
-            <View style={styles.alertContent}>
-              <Text style={styles.alertTitle}>
-                Tienes {expiringItems} producto{expiringItems > 1 ? "s" : ""} próximo{expiringItems > 1 ? "s" : ""} a caducar
-              </Text>
-              <Text style={styles.alertSubtitle}>
-                En los próximos 7 días
+        {/* Onboarding — sin despensa creada todavía */}
+        {!data.pantry && (
+          <Pressable
+            style={[styles.onboardingCard, shadows.sm]}
+            onPress={() => navigation.navigate("PantriesStack", { screen: "Pantries" } as any)}
+          >
+            <MaterialCommunityIcons name="fridge-outline" size={36} color={colors.primary} />
+            <View style={styles.onboardingContent}>
+              <Text style={styles.onboardingTitle}>Crea tu primera despensa</Text>
+              <Text style={styles.onboardingSubtitle}>
+                Toca aquí para empezar a gestionar tus productos.
               </Text>
             </View>
-            <Pressable
-              onPress={() =>
-                navigation.navigate("PantriesStack", { screen: "Pantries" } as any)
-              }
-            >
-              <Text style={styles.alertButton}>Ver</Text>
-            </Pressable>
+            <MaterialCommunityIcons name="chevron-right" size={22} color={colors.primary} />
+          </Pressable>
+        )}
+
+        {/* Próximos a caducar */}
+        {expiringCards.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Próximos a caducar</Text>
+              <Pressable onPress={() => navigation.navigate("Notifications")}>
+                <Text style={styles.sectionLink}>Ver todos</Text>
+              </Pressable>
+            </View>
+            {expiringCards.map((item) => (
+              <Pressable
+                key={item.id}
+                style={[styles.expiryCard, shadows.sm]}
+                onPress={() => navigation.navigate("PantriesStack", { screen: "Pantries" } as any)}
+              >
+                <View style={styles.expiryThumb}>
+                  {item.product.image_url ? (
+                    <Image source={{ uri: item.product.image_url }} style={styles.expiryImg} />
+                  ) : (
+                    <MaterialCommunityIcons name="package-variant" size={26} color={colors.subtext} />
+                  )}
+                </View>
+                <View style={styles.expiryInfo}>
+                  <Text style={styles.expiryName} numberOfLines={1}>{item.product.name}</Text>
+                  <Text style={[styles.expiryLabel, { color: getExpiryColor(item.expiry_date) }]}>
+                    {getExpiryLabel(item.expiry_date)}
+                  </Text>
+                </View>
+                <MaterialCommunityIcons
+                  name="clock-alert-outline"
+                  size={20}
+                  color={getExpiryColor(item.expiry_date)}
+                />
+              </Pressable>
+            ))}
           </View>
         )}
 
         {/* Stats Row */}
         <View style={styles.statsRow}>
-            <StatCard icon="package-variant" label="En despensa" value={totalItems.toString()} />
           <StatCard
-            icon="alert-circle"
-            label="Próximos"
-            value={expiringItems.toString()}
-            highlight={expiringItems > 0 ? "orange" : undefined}
+            icon="package-variant"
+            label="Despensa"
+            value={totalItems.toString()}
+            onPress={() => navigation.navigate("PantriesStack", { screen: "Pantries" } as any)}
           />
-          <StatCard icon="shopping-cart" label="En lista" value={pendingItems.toString()} />
+          <StatCard
+            icon="cart-outline"
+            label="Lista"
+            value={pendingItems.toString()}
+            onPress={() => navigation.navigate("ShoppingListStack", { screen: "ShoppingLists" } as any)}
+          />
         </View>
 
         {/* Quick Access */}
@@ -280,7 +374,12 @@ export function DashboardScreen() {
                     size={24}
                     color={colors.primary}
                   />
-                  <Text style={styles.recentLabel}>
+                  <Text
+                    style={styles.recentLabel}
+                    numberOfLines={2}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.6}
+                  >
                     {item.product.name}
                   </Text>
                 </View>
@@ -323,35 +422,53 @@ const styles = StyleSheet.create({
     color: colors.subtext,
     textTransform: "capitalize",
   },
-  alertCard: {
+  sectionHeader: {
     flexDirection: "row",
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.md,
-    padding: spacing.lg,
-    marginBottom: spacing.xxl,
+    justifyContent: "space-between",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
+    marginBottom: spacing.lg,
   },
-  alertIcon: {
-    marginRight: spacing.md,
-  },
-  alertContent: {
-    flex: 1,
-  },
-  alertTitle: {
-    ...typography.body,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  alertSubtitle: {
-    ...typography.bodySm,
-    color: colors.subtext,
-  },
-  alertButton: {
+  sectionLink: {
     ...typography.bodySm,
     color: colors.primary,
+    fontWeight: "600",
+  },
+  expiryCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.md,
+  },
+  expiryThumb: {
+    width: 52,
+    height: 52,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.secondary,
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  expiryImg: {
+    width: 52,
+    height: 52,
+    resizeMode: "cover",
+  },
+  expiryInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  expiryName: {
+    ...typography.body,
+    fontWeight: "600",
+    color: colors.text,
+  },
+  expiryLabel: {
+    ...typography.bodySm,
     fontWeight: "700",
   },
   statsRow: {
@@ -396,11 +513,11 @@ const styles = StyleSheet.create({
   recentCard: {
     backgroundColor: colors.white,
     borderRadius: borderRadius.md,
-    padding: spacing.lg,
+    padding: spacing.md,
     alignItems: "center",
     justifyContent: "center",
     width: 90,
-    minHeight: 100,
+    height: 90,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -410,5 +527,29 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: spacing.sm,
     textAlign: "center",
+  },
+  onboardingCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    marginBottom: spacing.xxl,
+    borderWidth: 1,
+    borderColor: colors.primary + "40",
+    gap: spacing.md,
+  },
+  onboardingContent: {
+    flex: 1,
+  },
+  onboardingTitle: {
+    ...typography.body,
+    fontWeight: "700",
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  onboardingSubtitle: {
+    ...typography.bodySm,
+    color: colors.subtext,
   },
 });

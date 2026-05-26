@@ -39,13 +39,19 @@ export function LoginScreen() {
       const serverMessage = axiosError?.response?.data?.message;
 
       if (serverErrors) {
-        if (serverErrors.email) setError("email", { message: serverErrors.email[0] });
-        if (serverErrors.password) setError("password", { message: serverErrors.password[0] });
-        if (!serverErrors.email && !serverErrors.password) setApiError(Object.values(serverErrors)[0][0]);
+        if (serverErrors.email) {
+          setError("email", { message: "Este correo no está registrado. ¿Quieres crear una cuenta?" });
+        }
+        if (serverErrors.password) {
+          setError("password", { message: "Contraseña incorrecta." });
+        }
+        if (!serverErrors.email && !serverErrors.password) {
+          setApiError(Object.values(serverErrors)[0][0]);
+        }
       } else if (status === 401 || status === 403) {
         setApiError("Email o contraseña incorrectos.");
       } else if (status === 404) {
-        setError("email", { message: "No existe ninguna cuenta con este email." });
+        setError("email", { message: "Este correo no está registrado. ¿Quieres crear una cuenta?" });
       } else if (status === 422 && serverMessage) {
         setApiError(serverMessage);
       } else if (error instanceof Error) {

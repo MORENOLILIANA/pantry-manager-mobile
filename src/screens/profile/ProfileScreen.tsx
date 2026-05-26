@@ -23,7 +23,7 @@ import { useAuth } from "@/context/AuthContext";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { colors, spacing, typography, borderRadius, shadows } from "@/config/theme";
 import { fetchCurrentUser, updateProfile, type AuthUser } from "@/api/auth";
-import { getPantries, updatePantry, deletePantry, type Pantry } from "@/api/pantries";
+import { getPantries, getPantryMembers, updatePantry, deletePantry, type Pantry, type PantryMember } from "@/api/pantries";
 import {
   getUserAvatar,
   saveUserAvatar,
@@ -66,6 +66,7 @@ export function ProfileScreen() {
   const [avatar, setAvatar] = useState<string | null>(null);
   const [avatarPhotoUri, setAvatarPhotoUri] = useState<string | null>(null);
   const [pantries, setPantries] = useState<Pantry[]>([]);
+  const [pantryMembers, setPantryMembers] = useState<Record<string, PantryMember[]>>({});
   const [pantryModalVisible, setPantryModalVisible] = useState(false);
   const [editingPantry, setEditingPantry] = useState<Pantry | null>(null);
   const [pantryEditName, setPantryEditName] = useState("");
@@ -82,6 +83,13 @@ export function ProfileScreen() {
       setUser(userData);
       setEditName(userData.name);
       setPantries(userPantries);
+      // Cargar miembros de cada despensa en paralelo
+      const memberResults = await Promise.all(
+        userPantries.map((p) => getPantryMembers(p.id).catch(() => [] as PantryMember[]))
+      );
+      const membersMap: Record<string, PantryMember[]> = {};
+      userPantries.forEach((p, i) => { membersMap[p.id] = memberResults[i]; });
+      setPantryMembers(membersMap);
     } catch (error) {
       console.error("Error fetching user:", error);
       crossAlert("Error", "No se pudieron cargar los datos del usuario");
@@ -381,34 +389,54 @@ export function ProfileScreen() {
               const isOwner = pantry.user_id == null || pantry.user_id === user?.id;
               return (
                 <View key={pantry.id} style={[styles.pantryItem, shadows.sm]}>
-                  <MaterialCommunityIcons
-                    name={isOwner ? "fridge-outline" : "fridge"}
-                    size={22}
-                    color={isOwner ? colors.primary : colors.subtext}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.pantryName} numberOfLines={1}>{pantry.name}</Text>
-                    {!isOwner && (
-                      <Text style={styles.pantryGuestLabel}>Despensa compartida</Text>
+                  {/* Fila principal */}
+                  <View style={styles.pantryMainRow}>
+                    <MaterialCommunityIcons
+                      name={isOwner ? "fridge-outline" : "fridge"}
+                      size={22}
+                      color={isOwner ? colors.primary : colors.subtext}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.pantryName} numberOfLines={1}>{pantry.name}</Text>
+                      {!isOwner && (
+                        <Text style={styles.pantryGuestLabel}>Despensa compartida</Text>
+                      )}
+                    </View>
+                    {isOwner && (
+                      <>
+                        <Pressable
+                          onPress={() => openRenameModal(pantry)}
+                          style={styles.pantryActionBtn}
+                          hitSlop={8}
+                        >
+                          <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.primary} />
+                        </Pressable>
+                        <Pressable
+                          onPress={() => handleDeletePantry(pantry)}
+                          style={styles.pantryActionBtn}
+                          hitSlop={8}
+                        >
+                          <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.error} />
+                        </Pressable>
+                      </>
                     )}
                   </View>
-                  {isOwner && (
-                    <>
-                      <Pressable
-                        onPress={() => openRenameModal(pantry)}
-                        style={styles.pantryActionBtn}
-                        hitSlop={8}
-                      >
-                        <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.primary} />
-                      </Pressable>
-                      <Pressable
-                        onPress={() => handleDeletePantry(pantry)}
-                        style={styles.pantryActionBtn}
-                        hitSlop={8}
-                      >
-                        <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.error} />
-                      </Pressable>
-                    </>
+                  {/* Miembros */}
+                  {(pantryMembers[pantry.id] ?? []).length > 0 && (
+                    <View style={styles.pantryMembersRow}>
+                      {(pantryMembers[pantry.id] ?? []).map((m) => (
+                        <View key={m.id} style={styles.pantryMemberChip}>
+                          <View style={styles.pantryMemberAvatar}>
+                            <Text style={styles.pantryMemberInitial}>
+                              {m.name.charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                          <Text style={styles.pantryMemberName} numberOfLines={1}>
+                            {m.name}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
                   )}
                 </View>
               );
@@ -724,8 +752,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   pantryItem: {
-    flexDirection: "row",
-    alignItems: "center",
     backgroundColor: colors.white,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.lg,
@@ -733,6 +759,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
+    gap: spacing.sm,
+  },
+  pantryMainRow: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.md,
   },
   pantryName: {
@@ -748,6 +779,42 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.subtext,
     marginTop: 2,
+  },
+  pantryMembersRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  pantryMemberChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: colors.secondary,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+  },
+  pantryMemberAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pantryMemberInitial: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: colors.white,
+  },
+  pantryMemberName: {
+    ...typography.caption,
+    color: colors.text,
+    fontWeight: "600",
+    maxWidth: 90,
   },
   avatarGrid: {
     flexDirection: "row",

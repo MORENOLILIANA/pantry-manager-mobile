@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, Pressable } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, borderRadius, typography } from "@/config/theme";
 
@@ -7,15 +7,24 @@ type Props = {
   value: string;
   icon?: string;
   highlight?: string;
+  onPress?: () => void;
 };
 
-export function StatCard({ label, value, icon, highlight }: Props) {
+export function StatCard({ label, value, icon, highlight, onPress }: Props) {
   return (
-    <View style={[styles.card, highlight === "orange" && styles.cardHighlight]}>
+    <Pressable
+      style={({ pressed }) => [
+        styles.card,
+        highlight === "orange" && styles.cardHighlight,
+        pressed && styles.cardPressed,
+      ]}
+      onPress={onPress}
+      disabled={!onPress}
+    >
       {icon ? <MaterialCommunityIcons name={icon as any} size={20} color={highlight === "orange" ? "#F39C12" : colors.primary} /> : null}
       <Text style={styles.label}>{label}</Text>
       <Text style={styles.value}>{value}</Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -32,7 +41,10 @@ const styles = StyleSheet.create({
   },
   cardHighlight: {
     borderColor: "#F39C12",
-    backgroundColor: "#FFF9EF"
+    backgroundColor: "#FFF9EF",
+  },
+  cardPressed: {
+    opacity: 0.7,
   },
   label: {
     color: colors.subtext,

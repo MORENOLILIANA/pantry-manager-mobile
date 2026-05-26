@@ -59,12 +59,13 @@ export type PantriesStackParamList = {
         item: PantryItem;
       };
   BarcodeScan: {
-    pantryId: string;
+    pantryId?: string;
+    shoppingListMode?: boolean;
   };
 };
 
 export type ShoppingListStackParamList = {
-  ShoppingLists: undefined;
+  ShoppingLists: { scannedProduct?: { name: string; brand?: string } } | undefined;
 };
 
 export type ProfileStackParamList = {
@@ -104,7 +105,7 @@ function DashboardStackNavigator() {
       <DashboardStack.Screen
         name="Dashboard"
         component={DashboardScreen}
-        options={{ title: "Dashboard" }}
+        options={{ title: "Inicio" }}
       />
       <DashboardStack.Screen
         name="Recipes"
@@ -234,7 +235,7 @@ export function AppStack() {
         name="DashboardStack"
         component={DashboardStackNavigator}
         options={{
-          title: "Dashboard",
+          title: "Inicio",
         }}
       />
       <Tab.Screen

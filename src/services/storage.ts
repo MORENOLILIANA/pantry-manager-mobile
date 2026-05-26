@@ -101,3 +101,14 @@ export async function toggleRecipeFavoriteId(recipeId: string) {
   await saveRecipeFavoriteIds(next);
   return next;
 }
+
+const onboardingDoneKey = "pantry-manager.onboarding-done";
+
+export async function getOnboardingDone(): Promise<boolean> {
+  const val = await AsyncStorage.getItem(onboardingDoneKey);
+  return val === "true";
+}
+
+export async function setOnboardingDone(): Promise<void> {
+  await AsyncStorage.setItem(onboardingDoneKey, "true");
+}
