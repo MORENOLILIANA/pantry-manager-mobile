@@ -229,10 +229,10 @@ export function ProductsScreen() {
 
       if (mode === "add") {
         const result = await addItem(pantryId, itemData);
-        savedProductId = result.product.id;
+        savedProductId = result.product?.id ?? result.product_id;
       } else if (mode === "edit" && itemId) {
         const result = await updateItem(pantryId, itemId, itemData);
-        savedProductId = result.product.id;
+        savedProductId = result.product?.id ?? result.product_id;
       }
 
       // Guardar imagen local si se eligió una

@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "Pantry Manager Mobile",
+    "name": "NutriCasa",
     "slug": "pantry-manager-mobile",
     "scheme": "nutricasa",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "platforms": [
       "ios",
@@ -14,16 +14,31 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nutricasa.app"
     },
     "android": {
-      "softwareKeyboardLayoutMode": "pan"
+      "softwareKeyboardLayoutMode": "pan",
+      "package": "com.nutricasa.app",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "bundler": "metro"
     },
     "plugins": [
-      "@react-native-community/datetimepicker"
-    ]
+      "@react-native-community/datetimepicker",
+      "expo-camera",
+      "expo-image-picker"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "7da8e7f8-3c6e-4d3d-9dac-7b20acfadaa5"
+      }
+    },
+    "owner": "lilianalili"
   }
 }

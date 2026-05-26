@@ -13,6 +13,8 @@ import {
   Platform,
   Keyboard,
   Modal,
+  LayoutAnimation,
+  UIManager,
 } from "react-native";
 import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
@@ -28,17 +30,17 @@ import {
   markPurchased,
   unmarkPurchased,
   deleteItem as deleteShoppingItem,
-  updateItem as updateShoppingItem,
   completeList,
   type ShoppingList,
   type ShoppingListItem,
 } from "@/api/shoppingLists";
 import { addItem as addItemToPantry, getPantries } from "@/api/pantries";
 
-const UNITS = ["ud", "kg", "g", "L", "ml", "paq"];
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
-type SeparatorRow = { id: string; separator: true };
-type ShoppingListRow = ShoppingListItem | SeparatorRow;
+const UNITS = ["ud", "kg", "g", "L", "ml", "paq"];
 
 type EditState = {
   item: ShoppingListItem;
@@ -47,6 +49,41 @@ type EditState = {
   unit: string;
   notes: string;
 };
+
+function ItemAvatar({ name, purchased }: { name: string; purchased: boolean }) {
+  const letter = (name || "?").trim().charAt(0).toUpperCase();
+  if (purchased) {
+    return (
+      <View style={[avStyles.circle, avStyles.circleChecked]}>
+        <MaterialCommunityIcons name="check" size={18} color={colors.white} />
+      </View>
+    );
+  }
+  return (
+    <View style={avStyles.circle}>
+      <Text style={avStyles.letter}>{letter}</Text>
+    </View>
+  );
+}
+
+const avStyles = StyleSheet.create({
+  circle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#E8F5E9",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  circleChecked: {
+    backgroundColor: colors.primary,
+  },
+  letter: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: colors.primary,
+  },
+});
 
 export function ShoppingListsScreen() {
   const navigation = useNavigation();
@@ -58,10 +95,10 @@ export function ShoppingListsScreen() {
   const [newItemText, setNewItemText] = useState("");
   const [editState, setEditState] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
+  const [purchasedExpanded, setPurchasedExpanded] = useState(true);
   const textInputRef = useRef<TextInput>(null);
   const initialLoadDone = useRef(false);
 
-  // Recibe producto escaneado desde BarcodeScanScreen
   useEffect(() => {
     const params = route.params as any;
     if (params?.scannedProduct !== undefined) {
@@ -172,7 +209,6 @@ export function ShoppingListsScreen() {
     }
     setSaving(true);
     try {
-      // Delete old item then re-add with updated data (avoids needing a PUT endpoint)
       const wasPurchased = editState.item.purchased;
       await deleteShoppingItem(list.id, editState.item.id);
       let newItem = await addShoppingItem(list.id, {
@@ -237,12 +273,12 @@ export function ShoppingListsScreen() {
   const handleDeleteItem = (item: ShoppingListItem) => {
     if (!list) return;
     Alert.alert(
-      "Eliminar",
-      `¿Eliminar "${item.name}"?`,
+      "Eliminar producto",
+      `¿Quitar "${item.name}" de la lista?`,
       [
         { text: "Cancelar", style: "cancel" },
         {
-          text: "Eliminar",
+          text: "Quitar",
           style: "destructive",
           onPress: async () => {
             try {
@@ -283,76 +319,92 @@ export function ShoppingListsScreen() {
     );
   };
 
+  const togglePurchasedExpanded = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setPurchasedExpanded((v) => !v);
+  };
+
   const pendingItems = list?.items.filter((i) => !i.purchased) || [];
   const purchasedItems = list?.items.filter((i) => i.purchased) || [];
   const totalCount = list?.items.length || 0;
   const purchasedCount = purchasedItems.length;
   const progress = totalCount > 0 ? purchasedCount / totalCount : 0;
-  const separatorRow: SeparatorRow = { id: "separator", separator: true };
+  const allDone = totalCount > 0 && purchasedCount === totalCount;
 
-  const renderItem = ({ item }: { item: ShoppingListRow }) => {
-    if ("separator" in item) {
-      return (
-        <View style={styles.sectionSeparator}>
-          <MaterialCommunityIcons name="cart-check" size={14} color={colors.subtext} />
-          <Text style={styles.sectionLabel}>En el carro · {purchasedItems.length}</Text>
-        </View>
-      );
-    }
+  const renderPendingItem = ({ item }: { item: ShoppingListItem }) => (
+    <Pressable
+      style={({ pressed }) => [styles.itemCard, pressed && styles.itemCardPressed]}
+      onPress={() => handleOpenEdit(item)}
+      onLongPress={() => handleDeleteItem(item)}
+    >
+      <Pressable onPress={() => handleTogglePurchased(item)} hitSlop={10}>
+        <ItemAvatar name={item.name} purchased={false} />
+      </Pressable>
 
-    return (
-      <View style={[styles.itemContainer, item.purchased && styles.itemContainerPurchased]}>
-        <Pressable onPress={() => handleTogglePurchased(item)} style={styles.checkboxArea} hitSlop={8}>
-          <View style={[styles.checkbox, item.purchased && styles.checkboxChecked]}>
-            {item.purchased && (
-              <MaterialCommunityIcons name="check" size={14} color={colors.white} />
-            )}
+      <View style={styles.itemBody}>
+        <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+        <View style={styles.itemMeta}>
+          <View style={styles.qtyChip}>
+            <Text style={styles.qtyChipText}>{item.quantity} {item.unit}</Text>
           </View>
-        </Pressable>
-
-        <Pressable
-          style={styles.itemInfo}
-          onPress={() => !item.purchased && handleOpenEdit(item)}
-        >
-          <Text style={[styles.itemName, item.purchased && styles.itemNamePurchased]} numberOfLines={1}>
-            {item.name}
-          </Text>
-          <Text style={styles.itemQuantity}>
-            {item.quantity} {item.unit}
-            {item.notes ? ` · ${item.notes}` : ""}
-          </Text>
-        </Pressable>
-
-        <View style={styles.itemActions}>
-          {item.purchased ? (
-            <Pressable onPress={() => handleMoveToPantry(item)} style={styles.iconBtn} hitSlop={8}>
-              <MaterialCommunityIcons name="fridge-outline" size={20} color={colors.primary} />
-            </Pressable>
-          ) : (
-            <Pressable onPress={() => handleOpenEdit(item)} style={styles.iconBtn} hitSlop={8}>
-              <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.subtext} />
-            </Pressable>
-          )}
-          <Pressable onPress={() => handleDeleteItem(item)} style={styles.iconBtn} hitSlop={8}>
-            <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.error} />
-          </Pressable>
+          {item.notes ? (
+            <Text style={styles.itemNote} numberOfLines={1}>{item.notes}</Text>
+          ) : null}
         </View>
       </View>
-    );
-  };
+
+      <Pressable onPress={() => handleDeleteItem(item)} hitSlop={8} style={styles.trashBtn}>
+        <MaterialCommunityIcons name="close" size={18} color={colors.placeholder} />
+      </Pressable>
+    </Pressable>
+  );
+
+  const renderPurchasedItem = ({ item }: { item: ShoppingListItem }) => (
+    <Pressable
+      style={[styles.itemCard, styles.itemCardPurchased]}
+      onPress={() => handleTogglePurchased(item)}
+    >
+      <ItemAvatar name={item.name} purchased />
+
+      <View style={styles.itemBody}>
+        <Text style={[styles.itemName, styles.itemNamePurchased]} numberOfLines={1}>
+          {item.name}
+        </Text>
+        <View style={styles.itemMeta}>
+          <View style={[styles.qtyChip, styles.qtyChipPurchased]}>
+            <Text style={[styles.qtyChipText, styles.qtyChipTextPurchased]}>{item.quantity} {item.unit}</Text>
+          </View>
+        </View>
+      </View>
+
+      <Pressable onPress={() => handleMoveToPantry(item)} hitSlop={8} style={styles.fridgeBtn}>
+        <MaterialCommunityIcons name="fridge-outline" size={20} color={colors.primary} />
+      </Pressable>
+    </Pressable>
+  );
 
   const ListHeader = () => (
-    <View style={styles.progressSection}>
+    <View style={styles.progressCard}>
       <View style={styles.progressLabelRow}>
         <Text style={styles.progressLabel}>
-          {purchasedCount === totalCount && totalCount > 0
-            ? "¡Lista completa!"
-            : `${purchasedCount} de ${totalCount} productos`}
+          {allDone
+            ? "¡Todo listo!"
+            : pendingItems.length === 0
+            ? "Sin productos"
+            : `${pendingItems.length} ${pendingItems.length === 1 ? "producto" : "productos"} por comprar`}
         </Text>
-        <Text style={styles.progressPct}>{Math.round(progress * 100)}%</Text>
+        <Text style={[styles.progressPct, allDone && styles.progressPctDone]}>
+          {Math.round(progress * 100)}%
+        </Text>
       </View>
       <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { flex: progress || 0.001 }]} />
+        <View
+          style={[
+            styles.progressFill,
+            { flex: progress || 0.001 },
+            allDone && styles.progressFillDone,
+          ]}
+        />
         <View style={{ flex: Math.max(1 - progress, 0.001) }} />
       </View>
     </View>
@@ -373,85 +425,114 @@ export function ShoppingListsScreen() {
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 24}
       >
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.headerTitle}>Mi lista</Text>
-        </View>
-        <View style={styles.headerRight}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerTitleRow}>
+            <Text style={styles.headerTitle}>Mi lista</Text>
+            {totalCount > 0 && (
+              <View style={styles.countBadge}>
+                <Text style={styles.countBadgeText}>{totalCount}</Text>
+              </View>
+            )}
+          </View>
           {totalCount > 0 && (
-            <Pressable onPress={handleCompleteList} hitSlop={8}>
-              <MaterialCommunityIcons name="check-all" size={24} color={colors.primary} />
+            <Pressable onPress={handleCompleteList} style={styles.completeBtn} hitSlop={8}>
+              <MaterialCommunityIcons name="check-all" size={16} color={colors.primary} />
+              <Text style={styles.completeBtnText}>Vaciar</Text>
             </Pressable>
           )}
         </View>
-      </View>
 
-      {totalCount === 0 ? (
-        <View style={styles.emptyContainer}>
-          <EmptyState
-            icon="cart-outline"
-            title="La lista está vacía"
-            subtitle="Añade productos que necesites comprar"
-          />
-        </View>
-      ) : (
-        <FlatList
-          data={
-            pendingItems.length > 0
-              ? [...pendingItems, ...(purchasedItems.length > 0 ? [separatorRow] : []), ...purchasedItems]
-              : purchasedItems
-          }
-          keyExtractor={(item) => item.id}
-          onRefresh={handleRefresh}
-          refreshing={refreshing}
-          contentContainerStyle={styles.listContent}
-          ListHeaderComponent={ListHeader}
-          renderItem={renderItem}
-        />
-      )}
+        {totalCount === 0 ? (
+          <View style={styles.emptyContainer}>
+            <EmptyState
+              icon="cart-outline"
+              title="La lista está vacía"
+              subtitle="Escribe un producto abajo o escanea un código de barras"
+            />
+          </View>
+        ) : (
+          <FlatList
+            data={pendingItems}
+            keyExtractor={(item) => item.id}
+            onRefresh={handleRefresh}
+            refreshing={refreshing}
+            contentContainerStyle={styles.listContent}
+            ListHeaderComponent={ListHeader}
+            renderItem={renderPendingItem}
+            ListFooterComponent={
+              purchasedItems.length > 0 ? (
+                <View style={styles.purchasedSection}>
+                  <Pressable onPress={togglePurchasedExpanded} style={styles.purchasedHeader}>
+                    <View style={styles.purchasedHeaderLeft}>
+                      <MaterialCommunityIcons name="cart-check" size={16} color={colors.subtext} />
+                      <Text style={styles.purchasedHeaderText}>
+                        En el carrito · {purchasedItems.length}
+                      </Text>
+                    </View>
+                    <MaterialCommunityIcons
+                      name={purchasedExpanded ? "chevron-up" : "chevron-down"}
+                      size={18}
+                      color={colors.subtext}
+                    />
+                  </Pressable>
 
-      {/* Add input */}
-      <View style={styles.inputContainer}>
-        <View style={[styles.inputRow, shadows.sm]}>
-          <Pressable
-            onPress={() => (navigation as any).navigate("PantriesStack", {
-              screen: "BarcodeScan",
-              params: { shoppingListMode: true },
-            })}
-            style={styles.scanIconBtn}
-            hitSlop={8}
-          >
-            <MaterialCommunityIcons name="barcode-scan" size={22} color={colors.primary} />
-          </Pressable>
-          <TextInput
-            ref={textInputRef}
-            style={styles.input}
-            placeholder="Escribe un producto..."
-            placeholderTextColor={colors.subtext}
-            value={newItemText}
-            onChangeText={setNewItemText}
-            onSubmitEditing={handleAddItem}
-            editable={!addingItem}
-            returnKeyType="done"
+                  {purchasedExpanded &&
+                    purchasedItems.map((item) => (
+                      <View key={item.id}>{renderPurchasedItem({ item })}</View>
+                    ))}
+                </View>
+              ) : null
+            }
           />
+        )}
+
+        {/* Add input */}
+        <View style={styles.inputContainer}>
+          <View style={styles.inputRow}>
+            <Pressable
+              onPress={() =>
+                (navigation as any).navigate("PantriesStack", {
+                  screen: "BarcodeScan",
+                  params: { shoppingListMode: true },
+                })
+              }
+              style={styles.scanBtn}
+              hitSlop={8}
+            >
+              <MaterialCommunityIcons name="barcode-scan" size={22} color={colors.primary} />
+            </Pressable>
+
+            <TextInput
+              ref={textInputRef}
+              style={styles.input}
+              placeholder="Añadir producto..."
+              placeholderTextColor={colors.placeholder}
+              value={newItemText}
+              onChangeText={setNewItemText}
+              onSubmitEditing={handleAddItem}
+              editable={!addingItem}
+              returnKeyType="done"
+            />
+
+            <Pressable
+              onPress={handleAddItem}
+              disabled={addingItem || !newItemText.trim()}
+              style={[
+                styles.sendBtn,
+                (!newItemText.trim() || addingItem) && styles.sendBtnDisabled,
+              ]}
+            >
+              {addingItem ? (
+                <ActivityIndicator size="small" color={colors.white} />
+              ) : (
+                <MaterialCommunityIcons name="arrow-up" size={20} color={colors.white} />
+              )}
+            </Pressable>
+          </View>
         </View>
-        <Pressable
-          onPress={handleAddItem}
-          disabled={addingItem || !newItemText.trim()}
-          style={[styles.addButton, (!newItemText.trim() || addingItem) && styles.addButtonDisabled]}
-        >
-          {addingItem ? (
-            <ActivityIndicator size="small" color={colors.white} />
-          ) : (
-            <MaterialCommunityIcons name="plus" size={20} color={colors.white} style={{ marginRight: 6 }} />
-          )}
-          <Text style={styles.addButtonText}>
-            {addingItem ? "Añadiendo..." : "Añadir a la lista"}
-          </Text>
-        </Pressable>
-      </View>
       </KeyboardAvoidingView>
 
       {/* Edit modal */}
@@ -471,23 +552,28 @@ export function ShoppingListsScreen() {
             <TextInput
               style={styles.fieldInput}
               value={editState?.name}
-              onChangeText={(t) => setEditState((s) => s ? { ...s, name: t } : s)}
+              onChangeText={(t) => setEditState((s) => (s ? { ...s, name: t } : s))}
               placeholder="Nombre del producto"
-              placeholderTextColor={colors.subtext}
+              placeholderTextColor={colors.placeholder}
+              autoFocus
             />
 
             <Text style={styles.fieldLabel}>Cantidad</Text>
             <View style={styles.qtyRow}>
               <Pressable
-                onPress={() => setEditState((s) => s ? { ...s, quantity: Math.max(1, s.quantity - 1) } : s)}
-                style={styles.qtyBtn}
+                onPress={() =>
+                  setEditState((s) => (s ? { ...s, quantity: Math.max(1, s.quantity - 1) } : s))
+                }
+                style={styles.qtyStepBtn}
               >
                 <MaterialCommunityIcons name="minus" size={20} color={colors.text} />
               </Pressable>
               <Text style={styles.qtyValue}>{editState?.quantity ?? 1}</Text>
               <Pressable
-                onPress={() => setEditState((s) => s ? { ...s, quantity: s.quantity + 1 } : s)}
-                style={styles.qtyBtn}
+                onPress={() =>
+                  setEditState((s) => (s ? { ...s, quantity: s.quantity + 1 } : s))
+                }
+                style={styles.qtyStepBtn}
               >
                 <MaterialCommunityIcons name="plus" size={20} color={colors.text} />
               </Pressable>
@@ -498,10 +584,15 @@ export function ShoppingListsScreen() {
               {UNITS.map((u) => (
                 <Pressable
                   key={u}
-                  onPress={() => setEditState((s) => s ? { ...s, unit: u } : s)}
+                  onPress={() => setEditState((s) => (s ? { ...s, unit: u } : s))}
                   style={[styles.unitChip, editState?.unit === u && styles.unitChipActive]}
                 >
-                  <Text style={[styles.unitChipText, editState?.unit === u && styles.unitChipTextActive]}>
+                  <Text
+                    style={[
+                      styles.unitChipText,
+                      editState?.unit === u && styles.unitChipTextActive,
+                    ]}
+                  >
                     {u}
                   </Text>
                 </Pressable>
@@ -512,9 +603,9 @@ export function ShoppingListsScreen() {
             <TextInput
               style={styles.fieldInput}
               value={editState?.notes}
-              onChangeText={(t) => setEditState((s) => s ? { ...s, notes: t } : s)}
+              onChangeText={(t) => setEditState((s) => (s ? { ...s, notes: t } : s))}
               placeholder="Ej. sin sal, marca X..."
-              placeholderTextColor={colors.subtext}
+              placeholderTextColor={colors.placeholder}
             />
 
             <View style={styles.modalButtons}>
@@ -539,194 +630,256 @@ export function ShoppingListsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.secondary,
+    backgroundColor: "#F0F4F3",
   },
-  flex: {
-    flex: 1,
-  },
+  flex: { flex: 1 },
   centerContent: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
+
+  // Header
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
     backgroundColor: colors.white,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  headerLeft: {},
-  headerTitle: {
-    ...typography.h2,
-    color: colors.text,
-  },
-  headerRight: {
+  headerTitleRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
+    gap: spacing.sm,
   },
-  progressSection: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  countBadge: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.full,
+    minWidth: 24,
+    height: 24,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 7,
+  },
+  countBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.white,
+  },
+  completeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  completeBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.primary,
+  },
+
+  // Progress
+  progressCard: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
     backgroundColor: colors.white,
-    marginBottom: spacing.xs,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    ...shadows.sm,
   },
   progressLabelRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
   progressLabel: {
     ...typography.bodySm,
     color: colors.subtext,
+    fontWeight: "500",
   },
   progressPct: {
     ...typography.bodySm,
     color: colors.primary,
     fontWeight: "700",
   },
+  progressPctDone: {
+    color: colors.success,
+  },
   progressTrack: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.border,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#E8F5E9",
     flexDirection: "row",
     overflow: "hidden",
   },
   progressFill: {
     backgroundColor: colors.primary,
-    borderRadius: 3,
+    borderRadius: 4,
+  },
+  progressFillDone: {
+    backgroundColor: colors.success,
+  },
+
+  // List
+  listContent: {
+    paddingBottom: spacing.xxl,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
   },
-  listContent: {
-    paddingBottom: spacing.lg,
-  },
-  sectionSeparator: {
+
+  // Item cards
+  itemCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.xl,
-    marginBottom: spacing.sm,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  sectionLabel: {
-    ...typography.bodySm,
-    color: colors.subtext,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  itemContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
     backgroundColor: colors.white,
     marginHorizontal: spacing.lg,
-    marginBottom: spacing.xs,
-    borderRadius: borderRadius.md,
+    marginBottom: spacing.sm,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    ...shadows.sm,
   },
-  itemContainerPurchased: {
-    opacity: 0.6,
+  itemCardPressed: {
+    opacity: 0.85,
   },
-  checkboxArea: {
-    marginRight: spacing.md,
+  itemCardPurchased: {
+    opacity: 0.65,
+    ...shadows.sm,
   },
-  checkbox: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    borderWidth: 2,
-    borderColor: colors.border,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  checkboxChecked: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  itemInfo: {
+  itemBody: {
     flex: 1,
-    gap: 2,
+    marginLeft: spacing.md,
+    gap: 4,
   },
   itemName: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 15,
     fontWeight: "600",
+    color: colors.text,
   },
   itemNamePurchased: {
     textDecorationLine: "line-through",
     color: colors.subtext,
     fontWeight: "400",
   },
-  itemQuantity: {
-    ...typography.bodySm,
-    color: colors.subtext,
-  },
-  itemActions: {
+  itemMeta: {
     flexDirection: "row",
     alignItems: "center",
-    marginLeft: spacing.sm,
+    gap: spacing.sm,
   },
-  iconBtn: {
-    padding: spacing.sm,
+  qtyChip: {
+    backgroundColor: "#E8F5E9",
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
   },
+  qtyChipPurchased: {
+    backgroundColor: colors.border,
+  },
+  qtyChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.primary,
+  },
+  qtyChipTextPurchased: {
+    color: colors.subtext,
+  },
+  itemNote: {
+    fontSize: 12,
+    color: colors.subtext,
+    fontStyle: "italic",
+    flex: 1,
+  },
+  trashBtn: {
+    padding: spacing.xs,
+  },
+  fridgeBtn: {
+    padding: spacing.xs,
+  },
+
+  // Purchased section
+  purchasedSection: {
+    marginTop: spacing.md,
+    marginHorizontal: spacing.lg,
+  },
+  purchasedHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  purchasedHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  purchasedHeaderText: {
+    ...typography.bodySm,
+    color: colors.subtext,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+
+  // Input area
   inputContainer: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
+    backgroundColor: colors.white,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    backgroundColor: colors.white,
-  },
-  input: {
-    flex: 1,
-    ...typography.body,
-    color: colors.text,
-    paddingVertical: spacing.sm,
   },
   inputRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: spacing.sm,
+    backgroundColor: "#F0F4F3",
+    borderRadius: borderRadius.full,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.xs,
+    paddingVertical: spacing.xs,
+    gap: spacing.sm,
   },
-  scanIconBtn: {
-    paddingHorizontal: spacing.xs,
+  scanBtn: {
+    padding: spacing.xs,
     justifyContent: "center",
     alignItems: "center",
   },
-  addButton: {
-    flexDirection: "row",
-    height: 48,
-    borderRadius: borderRadius.md,
+  input: {
+    flex: 1,
+    fontSize: 15,
+    color: colors.text,
+    paddingVertical: spacing.sm,
+  },
+  sendBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.primary,
     justifyContent: "center",
     alignItems: "center",
   },
-  addButtonText: {
-    ...typography.body,
-    color: colors.white,
-    fontWeight: "700",
-  },
-  addButtonDisabled: {
+  sendBtnDisabled: {
     backgroundColor: colors.disabled,
   },
+
+  // Edit modal
   modalWrapper: {
     flex: 1,
     justifyContent: "flex-end",
@@ -779,7 +932,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.md,
   },
-  qtyBtn: {
+  qtyStepBtn: {
     width: 40,
     height: 40,
     borderRadius: borderRadius.md,

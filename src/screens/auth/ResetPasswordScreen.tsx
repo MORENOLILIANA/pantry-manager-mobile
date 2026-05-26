@@ -104,7 +104,7 @@ export function ResetPasswordScreen() {
           <View style={styles.textSection}>
             <Text style={styles.title}>Nueva contraseña</Text>
             <Text style={styles.subtitle}>
-              Cuenta: <Text style={styles.emailText}>{email}</Text>
+              Cuenta: <Text style={styles.emailText}>{params.email}</Text>
             </Text>
           </View>
 

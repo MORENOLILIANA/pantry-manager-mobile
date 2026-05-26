@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import {
   StyleSheet,
   View,
@@ -74,18 +74,6 @@ export function BarcodeScanScreen() {
   const isProcessing = useRef(false);
   const [manualInputVisible, setManualInputVisible] = useState(false);
   const [manualBarcode, setManualBarcode] = useState("");
-  const [resolvedPantryId, setResolvedPantryId] = useState<string | undefined>(routePantryId);
-
-  // Si no viene pantryId (acceso desde la pestaña), carga la primera despensa
-  useEffect(() => {
-    if (!routePantryId) {
-      getPantries()
-        .then((pantries) => {
-          if (pantries?.length) setResolvedPantryId(pantries[0].id);
-        })
-        .catch(() => {});
-    }
-  }, [routePantryId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -96,7 +84,7 @@ export function BarcodeScanScreen() {
   );
 
   // Navega a Products o a ShoppingLists según el modo
-  const goToProducts = (params: Record<string, any>) => {
+  const goToProducts = async (params: Record<string, any>) => {
     const shoppingListMode = (route.params as any)?.shoppingListMode;
 
     if (shoppingListMode) {
@@ -113,16 +101,26 @@ export function BarcodeScanScreen() {
       return;
     }
 
-    if (!resolvedPantryId) {
+    // Siempre busca la despensa en el momento del escaneo para evitar datos obsoletos
+    let pantryId: string | undefined = routePantryId;
+    if (!pantryId) {
+      try {
+        const pantries = await getPantries();
+        pantryId = pantries?.[0]?.id;
+      } catch {}
+    }
+
+    if (!pantryId) {
       Alert.alert("Sin despensa", "Crea primero una despensa desde la sección Mi Despensa.");
       isProcessing.current = false;
       setScanned(false);
       setLoading(false);
       return;
     }
+
     (navigation as any).navigate("PantriesStack", {
       screen: "Products",
-      params: { pantryId: resolvedPantryId, ...params },
+      params: { pantryId, ...params },
     });
     setLoading(false);
   };
