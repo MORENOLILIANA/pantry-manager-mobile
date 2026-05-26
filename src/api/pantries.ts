@@ -134,3 +134,19 @@ export async function getNotifications(pantryId: string): Promise<Notification[]
   );
   return response.data.data;
 }
+
+/**
+ * Genera un token de invitación para compartir la despensa
+ */
+export async function sharePantry(pantryId: string): Promise<{ token: string; share_url?: string }> {
+  const response = await apiClient.post<any>(`/pantries/${pantryId}/share`);
+  return response.data?.data ?? response.data;
+}
+
+/**
+ * Unirse a una despensa compartida mediante token
+ */
+export async function joinSharedPantry(token: string): Promise<Pantry> {
+  const response = await apiClient.post<any>(`/pantries/shared/${token}`);
+  return response.data?.data ?? response.data;
+}

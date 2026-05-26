@@ -9,7 +9,7 @@ type AuthState = {
   token: string | null;
   isBootstrapping: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (name: string, email: string, password: string, passwordConfirmation: string) => Promise<void>;
+  signUp: (name: string, email: string, password: string, passwordConfirmation: string) => Promise<{ needsLogin: boolean }>;
   signOut: () => Promise<void>;
   refreshSession: () => Promise<void>;
 };
@@ -82,28 +82,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await persistSession(nextToken, response.user);
   }
 
-  async function signUp(name: string, email: string, password: string, passwordConfirmation: string) {
-    try {
-      const response = await apiRegister({
-        name,
-        email,
-        password,
-        password_confirmation: passwordConfirmation
-      });
-      console.log("📝 Respuesta del registro:", response);
-      
-      const nextToken = response.token ?? response.access_token;
+  async function signUp(name: string, email: string, password: string, passwordConfirmation: string): Promise<{ needsLogin: boolean }> {
+    const response = await apiRegister({
+      name,
+      email,
+      password,
+      password_confirmation: passwordConfirmation
+    });
 
-      if (!nextToken) {
-        console.error("❌ Token no encontrado en respuesta:", JSON.stringify(response, null, 2));
-        throw new Error("La API no devolvió un token de acceso. Respuesta: " + JSON.stringify(response));
-      }
+    const nextToken = response.token ?? response.access_token;
 
-      await persistSession(nextToken, response.user);
-    } catch (error) {
-      console.error("⚠️ Error en signUp:", error);
-      throw error;
+    if (!nextToken) {
+      // Backend registró al usuario pero no devuelve token — hay que hacer login
+      return { needsLogin: true };
     }
+
+    await persistSession(nextToken, response.user!);
+    return { needsLogin: false };
   }
 
   async function signOut() {

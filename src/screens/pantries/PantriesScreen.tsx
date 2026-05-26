@@ -9,6 +9,10 @@ import {
   Pressable,
   Alert,
   TextInput,
+  Modal,
+  Share,
+  Platform,
+  KeyboardAvoidingView,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -21,7 +25,10 @@ import { StatusBadge } from "@/components/StatusBadge";
 import {
   getPantries,
   getPantry,
+  createPantry,
   deleteItem as deleteItemApi,
+  sharePantry,
+  joinSharedPantry,
   type Pantry,
   type PantryItem,
 } from "@/api/pantries";
@@ -64,6 +71,17 @@ export function PantriesScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLocation, setSelectedLocation] = useState<LocationFilter>("all");
   const [selectedExpiry, setSelectedExpiry] = useState<ExpiryFilter>("all");
+
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [newPantryName, setNewPantryName] = useState("");
+  const [createLoading, setCreateLoading] = useState(false);
+
+  const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
+  const [joinLoading, setJoinLoading] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   const loadPantries = async () => {
     try {
@@ -153,6 +171,71 @@ export function PantriesScreen() {
     )[0];
   }, [allItems]);
 
+  const handleCreatePantry = async () => {
+    const name = newPantryName.trim();
+    if (!name) {
+      Alert.alert("Error", "El nombre de la despensa es obligatorio.");
+      return;
+    }
+    try {
+      setCreateLoading(true);
+      await createPantry({ name });
+      setCreateModalVisible(false);
+      setNewPantryName("");
+      await loadPantries();
+    } catch (e: any) {
+      const msg = e?.response?.data?.message ?? "No se pudo crear la despensa.";
+      Alert.alert("Error", msg);
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
+  const handleOpenShareModal = async () => {
+    setShareToken(null);
+    setJoinCode("");
+    setJoinError(null);
+    setShareModalVisible(true);
+    if (!pantry) return;
+    try {
+      setShareLoading(true);
+      const result = await sharePantry(pantry.id);
+      setShareToken(result.token ?? result.share_url ?? null);
+    } catch (e) {
+      setShareToken(null);
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const handleCopyOrShare = async () => {
+    if (!shareToken) return;
+    const shareUrl = shareToken.startsWith("http")
+      ? shareToken
+      : `https://nutricasa.duckdns.org/pantry/shared/${shareToken}`;
+    if (Platform.OS === "web") {
+      try { await navigator.clipboard.writeText(shareUrl); alert("Enlace copiado al portapapeles."); } catch { alert(shareUrl); }
+    } else {
+      await Share.share({ message: `Únete a mi despensa en NutriCasa: ${shareUrl}`, url: shareUrl });
+    }
+  };
+
+  const handleJoin = async () => {
+    const code = joinCode.trim();
+    if (!code) { setJoinError("Introduce el código de invitación."); return; }
+    try {
+      setJoinLoading(true);
+      setJoinError(null);
+      await joinSharedPantry(code);
+      setShareModalVisible(false);
+      await loadPantries();
+    } catch (e: any) {
+      setJoinError(e?.response?.data?.message ?? "Código no válido o expirado.");
+    } finally {
+      setJoinLoading(false);
+    }
+  };
+
   const handleDeleteItem = (item: PantryItem) => {
     if (!pantry) return;
 
@@ -209,11 +292,48 @@ export function PantriesScreen() {
   if (!pantry) {
     return (
       <SafeAreaView style={styles.container}>
-        <EmptyState
-          icon="cube-outline"
-          title="Sin despensas"
-          subtitle="No hay despensas disponibles"
-        />
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Mi Despensa</Text>
+          <View style={{ width: 44 }} />
+        </View>
+        <View style={styles.createContainer}>
+          <MaterialCommunityIcons name="fridge-outline" size={72} color={colors.primary} style={{ marginBottom: spacing.xl }} />
+          <Text style={styles.createTitle}>Crea tu primera despensa</Text>
+          <Text style={styles.createSubtitle}>
+            Organiza tus productos, controla las caducidades y compártela con quien quieras.
+          </Text>
+          <Pressable onPress={() => setCreateModalVisible(true)} style={styles.createButton}>
+            <MaterialCommunityIcons name="plus" size={20} color={colors.white} />
+            <Text style={styles.createButtonText}>Crear despensa</Text>
+          </Pressable>
+        </View>
+
+        {/* Modal crear despensa */}
+        <Modal visible={createModalVisible} transparent animationType="fade" onRequestClose={() => setCreateModalVisible(false)}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
+            <Pressable style={styles.modalBackdrop} onPress={() => setCreateModalVisible(false)} />
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Nueva despensa</Text>
+              <TextInput
+                style={styles.joinInput}
+                placeholder="Nombre (ej: Casa, Oficina...)"
+                placeholderTextColor={colors.subtext}
+                value={newPantryName}
+                onChangeText={setNewPantryName}
+                autoFocus
+                maxLength={60}
+              />
+              <Pressable onPress={handleCreatePantry} disabled={createLoading} style={styles.joinButton}>
+                {createLoading
+                  ? <ActivityIndicator color={colors.white} />
+                  : <Text style={styles.joinButtonText}>Crear</Text>}
+              </Pressable>
+              <Pressable onPress={() => setCreateModalVisible(false)} style={styles.modalClose}>
+                <Text style={styles.modalCloseText}>Cancelar</Text>
+              </Pressable>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
       </SafeAreaView>
     );
   }
@@ -223,9 +343,14 @@ export function PantriesScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{pantry.name}</Text>
-        <Pressable onPress={handleAddItem} style={styles.addButton}>
-          <MaterialCommunityIcons name="plus" size={24} color={colors.white} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable onPress={handleOpenShareModal} style={styles.shareButton}>
+            <MaterialCommunityIcons name="account-plus" size={22} color={colors.primary} />
+          </Pressable>
+          <Pressable onPress={handleAddItem} style={styles.addButton}>
+            <MaterialCommunityIcons name="plus" size={24} color={colors.white} />
+          </Pressable>
+        </View>
       </View>
 
       {/* Búsqueda */}
@@ -387,6 +512,67 @@ export function PantriesScreen() {
           )}
         />
       )}
+      {/* Modal compartir despensa */}
+      <Modal visible={shareModalVisible} transparent animationType="fade" onRequestClose={() => setShareModalVisible(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setShareModalVisible(false)} />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Compartir despensa</Text>
+
+            {/* Sección: compartir */}
+            <View style={styles.modalSection}>
+              <Text style={styles.modalSectionTitle}>Invita a alguien</Text>
+              <Text style={styles.modalDesc}>Comparte este enlace con la persona que quieras añadir a tu despensa.</Text>
+              {shareLoading ? (
+                <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} />
+              ) : shareToken ? (
+                <>
+                  <View style={styles.tokenBox}>
+                    <Text style={styles.tokenText} numberOfLines={2}>
+                      {shareToken.startsWith("http") ? shareToken : `https://nutricasa.duckdns.org/pantry/shared/${shareToken}`}
+                    </Text>
+                  </View>
+                  <Pressable onPress={handleCopyOrShare} style={styles.copyButton}>
+                    <MaterialCommunityIcons name="share-variant" size={18} color={colors.white} />
+                    <Text style={styles.copyButtonText}>
+                      {Platform.OS === "web" ? "Copiar enlace" : "Compartir enlace"}
+                    </Text>
+                  </Pressable>
+                </>
+              ) : (
+                <Text style={styles.modalDesc}>No se pudo generar el enlace.</Text>
+              )}
+            </View>
+
+            {/* Divisor */}
+            <View style={styles.divider} />
+
+            {/* Sección: unirse */}
+            <View style={styles.modalSection}>
+              <Text style={styles.modalSectionTitle}>Unirse a una despensa</Text>
+              <Text style={styles.modalDesc}>Introduce el código o pega el enlace de invitación.</Text>
+              <TextInput
+                style={styles.joinInput}
+                placeholder="Código o enlace de invitación"
+                placeholderTextColor={colors.subtext}
+                value={joinCode}
+                onChangeText={(t) => { setJoinCode(t); setJoinError(null); }}
+                autoCapitalize="none"
+              />
+              {joinError && <Text style={styles.joinError}>{joinError}</Text>}
+              <Pressable onPress={handleJoin} disabled={joinLoading} style={styles.joinButton}>
+                {joinLoading
+                  ? <ActivityIndicator color={colors.white} />
+                  : <Text style={styles.joinButtonText}>Unirse</Text>}
+              </Pressable>
+            </View>
+
+            <Pressable onPress={() => setShareModalVisible(false)} style={styles.modalClose}>
+              <Text style={styles.modalCloseText}>Cerrar</Text>
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -401,6 +587,38 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  createContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: spacing.xl,
+  },
+  createTitle: {
+    ...typography.h2,
+    color: colors.text,
+    textAlign: "center",
+    marginBottom: spacing.md,
+  },
+  createSubtitle: {
+    ...typography.body,
+    color: colors.subtext,
+    textAlign: "center",
+    marginBottom: spacing.xl,
+  },
+  createButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  createButtonText: {
+    ...typography.body,
+    color: colors.white,
+    fontWeight: "700",
+  },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -413,6 +631,20 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...typography.h2,
     color: colors.text,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  shareButton: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    justifyContent: "center",
+    alignItems: "center",
   },
   addButton: {
     width: 44,
@@ -534,5 +766,106 @@ const styles = StyleSheet.create({
     ...typography.bodySm,
     color: colors.subtext,
     marginLeft: spacing.md,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  modalCard: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    width: "88%",
+    maxWidth: 420,
+  },
+  modalTitle: {
+    ...typography.h2,
+    color: colors.text,
+    textAlign: "center",
+    marginBottom: spacing.lg,
+  },
+  modalSection: {
+    marginBottom: spacing.md,
+  },
+  modalSectionTitle: {
+    ...typography.body,
+    fontWeight: "700",
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  modalDesc: {
+    ...typography.bodySm,
+    color: colors.subtext,
+    marginBottom: spacing.md,
+  },
+  tokenBox: {
+    backgroundColor: colors.secondary,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  tokenText: {
+    ...typography.bodySm,
+    color: colors.text,
+    fontFamily: "monospace",
+  },
+  copyButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+  },
+  copyButtonText: {
+    ...typography.body,
+    color: colors.white,
+    fontWeight: "700",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: spacing.lg,
+  },
+  joinInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    ...typography.body,
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  joinError: {
+    ...typography.bodySm,
+    color: colors.error,
+    marginBottom: spacing.sm,
+  },
+  joinButton: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    alignItems: "center",
+  },
+  joinButtonText: {
+    ...typography.body,
+    color: colors.white,
+    fontWeight: "700",
+  },
+  modalClose: {
+    marginTop: spacing.lg,
+    alignItems: "center",
+  },
+  modalCloseText: {
+    ...typography.bodySm,
+    color: colors.subtext,
+    fontWeight: "600",
   },
 });

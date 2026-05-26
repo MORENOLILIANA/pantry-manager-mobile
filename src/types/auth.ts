@@ -9,5 +9,7 @@ export type AuthUser = {
 export type AuthResponse = {
   token?: string;
   access_token?: string;
-  user: AuthUser;
+  user?: AuthUser;
+  success?: boolean;
+  message?: string;
 };

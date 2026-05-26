@@ -33,6 +33,14 @@ import {
 
 type Navigation = NativeStackNavigationProp<any>;
 
+function crossAlert(title: string, message?: string) {
+  if (Platform.OS === "web") {
+    window.alert(message ? `${title}\n${message}` : title);
+  } else {
+    Alert.alert(title, message);
+  }
+}
+
 const AVATAR_OPTIONS = [
   "account",
   "account-star",
@@ -46,7 +54,7 @@ const AVATAR_OPTIONS = [
 
 export function ProfileScreen() {
   const navigation = useNavigation<Navigation>();
-  const { user: authUser, signOut } = useAuth();
+  const { user: authUser, signOut, refreshSession } = useAuth();
 
   const [user, setUser] = useState<AuthUser | null>(authUser || null);
   const [loading, setLoading] = useState(true);
@@ -66,7 +74,7 @@ export function ProfileScreen() {
       setEditName(userData.name);
     } catch (error) {
       console.error("Error fetching user:", error);
-      Alert.alert("Error", "No se pudieron cargar los datos del usuario");
+      crossAlert("Error", "No se pudieron cargar los datos del usuario");
     } finally {
       setLoading(false);
     }
@@ -101,22 +109,21 @@ export function ProfileScreen() {
   // Editar perfil
   const handleEditProfile = async () => {
     if (!editName.trim()) {
-      Alert.alert("Error", "El nombre no puede estar vacío");
+      crossAlert("Error", "El nombre no puede estar vacío");
       return;
     }
 
     try {
       setEditLoading(true);
-      const updatedUser = await updateProfile({ name: editName.trim() });
+      const updatedUser = await updateProfile({ name: editName.trim(), email: user?.email ?? "" });
       setUser(updatedUser);
+      await refreshSession();
       setEditModalVisible(false);
-      Alert.alert("Éxito", "Perfil actualizado correctamente");
+      crossAlert("Perfil actualizado", "Tu nombre se ha actualizado correctamente.");
     } catch (error: any) {
       console.error("Error updating profile:", error);
-      const message =
-        error.response?.data?.message ||
-        "No se pudo actualizar el perfil";
-      Alert.alert("Error", message);
+      const message = error.response?.data?.message || "No se pudo actualizar el perfil";
+      crossAlert("Error", message);
     } finally {
       setEditLoading(false);
     }
@@ -124,21 +131,29 @@ export function ProfileScreen() {
 
   // Cerrar sesión
   const handleLogout = () => {
-    Alert.alert("Cerrar sesión", "¿Estás seguro de que deseas cerrar sesión?", [
-      { text: "Cancelar", onPress: () => {} },
-      {
-        text: "Cerrar sesión",
-        onPress: async () => {
-          try {
-            await signOut();
-          } catch (error) {
-            console.error("Error logging out:", error);
-            Alert.alert("Error", "No se pudo cerrar sesión");
-          }
-        },
-        style: "destructive",
-      },
-    ]);
+    const doSignOut = async () => {
+      try {
+        await signOut();
+      } catch (error) {
+        console.error("Error logging out:", error);
+        if (Platform.OS === "web") {
+          window.alert("No se pudo cerrar sesión");
+        } else {
+          Alert.alert("Error", "No se pudo cerrar sesión");
+        }
+      }
+    };
+
+    if (Platform.OS === "web") {
+      if (window.confirm("¿Estás seguro de que deseas cerrar sesión?")) {
+        void doSignOut();
+      }
+    } else {
+      Alert.alert("Cerrar sesión", "¿Estás seguro de que deseas cerrar sesión?", [
+        { text: "Cancelar", onPress: () => {} },
+        { text: "Cerrar sesión", onPress: () => void doSignOut(), style: "destructive" },
+      ]);
+    }
   };
 
   const handleSelectAvatar = async (iconName: string) => {
@@ -153,7 +168,7 @@ export function ProfileScreen() {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert("Permiso requerido", "Necesitamos acceso a tu galería para seleccionar una foto.");
+        crossAlert("Permiso requerido", "Necesitamos acceso a tu galería para seleccionar una foto.");
         return;
       }
 
@@ -171,34 +186,28 @@ export function ProfileScreen() {
       }
     } catch (error) {
       console.error("Error selecting photo:", error);
-      Alert.alert("Error", "No se pudo seleccionar la foto.");
+      crossAlert("Error", "No se pudo seleccionar la foto.");
     }
   };
 
   const handleAvatarCirclePress = () => {
+    if (Platform.OS === "web") {
+      setAvatarModalVisible(true);
+      return;
+    }
     Alert.alert("Foto de perfil", "Elige cómo quieres personalizar tu perfil", [
       { text: "Cancelar", style: "cancel" },
-      {
-        text: "Elegir foto",
-        onPress: () => {
-          void handlePickPhoto();
-        },
-      },
-      {
-        text: "Elegir avatar",
-        onPress: () => setAvatarModalVisible(true),
-      },
+      { text: "Elegir foto", onPress: () => void handlePickPhoto() },
+      { text: "Elegir avatar", onPress: () => setAvatarModalVisible(true) },
       ...(avatarPhotoUri
-        ? [
-            {
-              text: "Quitar foto",
-              style: "destructive" as const,
-              onPress: async () => {
-                setAvatarPhotoUri(null);
-                await clearUserAvatarPhoto();
-              },
+        ? [{
+            text: "Quitar foto",
+            style: "destructive" as const,
+            onPress: async () => {
+              setAvatarPhotoUri(null);
+              await clearUserAvatarPhoto();
             },
-          ]
+          }]
         : []),
     ]);
   };

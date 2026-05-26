@@ -35,13 +35,165 @@ interface MealDetail {
   strMealThumb?: string;
   strInstructions?: string;
   ingredients: string[];
+  matchCount: number;
+  totalIngredients: number;
+}
+
+// Traducciones básicas español → inglés para TheMealDB
+const ES_TO_EN: Record<string, string> = {
+  leche: "milk",
+  huevo: "egg",
+  huevos: "eggs",
+  pollo: "chicken",
+  carne: "beef",
+  ternera: "beef",
+  cerdo: "pork",
+  tomate: "tomato",
+  tomates: "tomatoes",
+  cebolla: "onion",
+  cebollas: "onions",
+  ajo: "garlic",
+  arroz: "rice",
+  pasta: "pasta",
+  espaguetis: "spaghetti",
+  macarrones: "macaroni",
+  aceite: "oil",
+  "aceite de oliva": "olive oil",
+  mantequilla: "butter",
+  sal: "salt",
+  azucar: "sugar",
+  azúcar: "sugar",
+  harina: "flour",
+  zanahoria: "carrot",
+  zanahorias: "carrots",
+  patata: "potato",
+  patatas: "potatoes",
+  papa: "potato",
+  papas: "potatoes",
+  pimiento: "pepper",
+  pimientos: "peppers",
+  lechuga: "lettuce",
+  queso: "cheese",
+  yogur: "yogurt",
+  atun: "tuna",
+  atún: "tuna",
+  salmon: "salmon",
+  salmón: "salmon",
+  jamon: "ham",
+  jamón: "ham",
+  chorizo: "chorizo",
+  lenteja: "lentils",
+  lentejas: "lentils",
+  garbanzo: "chickpeas",
+  garbanzos: "chickpeas",
+  frijoles: "beans",
+  alubias: "beans",
+  espinaca: "spinach",
+  espinacas: "spinach",
+  brocoli: "broccoli",
+  brócoli: "broccoli",
+  coliflor: "cauliflower",
+  champiñon: "mushroom",
+  champiñones: "mushrooms",
+  limon: "lemon",
+  limón: "lemon",
+  naranja: "orange",
+  manzana: "apple",
+  platano: "banana",
+  plátano: "banana",
+  uvas: "grapes",
+  fresas: "strawberries",
+  pan: "bread",
+  leche_de_coco: "coconut milk",
+  "leche de coco": "coconut milk",
+  nata: "cream",
+  crema: "cream",
+  vinagre: "vinegar",
+  pimienta: "black pepper",
+  oregano: "oregano",
+  orégano: "oregano",
+  comino: "cumin",
+  paprika: "paprika",
+  pimenton: "paprika",
+  pimentón: "paprika",
+  cilantro: "coriander",
+  perejil: "parsley",
+  albahaca: "basil",
+  tomillo: "thyme",
+  romero: "rosemary",
+  canela: "cinnamon",
+  vainilla: "vanilla",
+  chocolate: "chocolate",
+  cacao: "cocoa powder",
+  nuez: "walnut",
+  nueces: "walnuts",
+  almendra: "almonds",
+  almendras: "almonds",
+  cacahuete: "peanut",
+  cacahuetes: "peanuts",
+  maiz: "corn",
+  maíz: "corn",
+  atun_en_lata: "tuna",
+  sardinas: "sardines",
+  gambas: "prawns",
+  langostinos: "prawns",
+  mejillones: "mussels",
+  bacalao: "cod",
+  merluza: "hake",
+};
+
+function translateToEnglish(spanishName: string): string {
+  const lower = spanishName.toLowerCase().trim();
+  return ES_TO_EN[lower] ?? lower;
+}
+
+async function fetchMealsByIngredient(ingredient: string): Promise<MealSummary[]> {
+  try {
+    const res = await fetch(
+      `https://www.themealdb.com/api/json/v1/1/filter.php?i=${encodeURIComponent(ingredient)}`
+    );
+    const json = await res.json();
+    return json?.meals ?? [];
+  } catch {
+    return [];
+  }
+}
+
+async function fetchMealDetail(idMeal: string): Promise<MealDetail | null> {
+  try {
+    const res = await fetch(
+      `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${idMeal}`
+    );
+    const json = await res.json();
+    const meal = json?.meals?.[0];
+    if (!meal) return null;
+
+    const ingredients: string[] = [];
+    for (let i = 1; i <= 20; i++) {
+      const ing = meal[`strIngredient${i}`];
+      if (ing && ing.trim()) ingredients.push(ing.trim().toLowerCase());
+    }
+
+    return {
+      idMeal: meal.idMeal,
+      strMeal: meal.strMeal,
+      strCategory: meal.strCategory,
+      strMealThumb: meal.strMealThumb,
+      strInstructions: meal.strInstructions,
+      ingredients,
+      matchCount: 0,
+      totalIngredients: ingredients.length,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export function RecipesScreen() {
   const navigation = useNavigation<Navigation>();
   const [loading, setLoading] = useState(true);
   const [meals, setMeals] = useState<MealDetail[]>([]);
-  const [availableProducts, setAvailableProducts] = useState<string[]>([]);
+  const [pantryWords, setPantryWords] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
@@ -58,69 +210,66 @@ export function RecipesScreen() {
         setLoading(true);
 
         const pantries = await getPantries().catch(() => []);
-        if (!pantries || pantries.length === 0) {
+        if (!pantries?.length) {
           setMeals([]);
-          setAvailableProducts([]);
           return;
         }
 
-        const first = pantries[0];
-        const pantry = await getPantry(first.id).catch(() => null);
-        const productNames = (pantry?.items || []).map((i) =>
-          i.product.name.toLowerCase()
+        const pantry = await getPantry(pantries[0].id).catch(() => null);
+        const rawNames = (pantry?.items ?? []).map((i) => i.product.name.toLowerCase());
+
+        // Traduce los nombres al inglés para TheMealDB
+        const englishNames = rawNames.map(translateToEnglish);
+        const uniqueEnglish = [...new Set(englishNames)];
+        setPantryWords(uniqueEnglish);
+
+        if (!uniqueEnglish.length) {
+          setMeals([]);
+          return;
+        }
+
+        // Busca con los primeros 6 ingredientes en paralelo
+        const searchTerms = uniqueEnglish.slice(0, 6);
+        const searchResults = await Promise.all(
+          searchTerms.map(fetchMealsByIngredient)
         );
-        setAvailableProducts(productNames);
 
-        const firstIngredient = productNames[0];
-        if (!firstIngredient) {
-          setMeals([]);
-          return;
+        // Cuenta cuántas búsquedas encontraron cada meal
+        const idCount: Record<string, number> = {};
+        const idThumb: Record<string, string> = {};
+        for (const results of searchResults) {
+          for (const meal of results) {
+            idCount[meal.idMeal] = (idCount[meal.idMeal] ?? 0) + 1;
+            idThumb[meal.idMeal] = meal.strMealThumb;
+          }
         }
 
-        const filterRes = await fetch(
-          `https://www.themealdb.com/api/json/v1/1/filter.php?i=${encodeURIComponent(
-            firstIngredient
-          )}`
-        ).then((r) => r.json());
+        // Ordenar por apariciones (más = más relevante), tomar los 24 mejores
+        const sortedIds = Object.entries(idCount)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 24)
+          .map(([id]) => id);
 
-        const summaries: MealSummary[] = filterRes?.meals || [];
+        // Obtener detalles en paralelo
+        const details = (
+          await Promise.all(sortedIds.map(fetchMealDetail))
+        ).filter((m): m is MealDetail => m !== null);
 
-        const limited = summaries.slice(0, 12);
-        const details: MealDetail[] = [];
-
-        await Promise.all(
-          limited.map(async (m) => {
-            try {
-              const lookup = await fetch(
-                `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${m.idMeal}`
-              ).then((r) => r.json());
-              const meal = lookup?.meals?.[0];
-              if (!meal) return;
-
-              const ingredients: string[] = [];
-              for (let i = 1; i <= 20; i++) {
-                const ing = meal[`strIngredient${i}`];
-                if (ing && ing.trim()) ingredients.push(ing.trim());
-              }
-
-              details.push({
-                idMeal: meal.idMeal,
-                strMeal: meal.strMeal,
-                strCategory: meal.strCategory,
-                strMealThumb: meal.strMealThumb,
-                strInstructions: meal.strInstructions,
-                ingredients,
-              });
-            } catch (e) {
-              // ignore per-meal errors
-            }
+        // Calcular score real: cuántos ingredientes de la receta están en la despensa
+        const scored = details
+          .map((meal) => {
+            const matchCount = meal.ingredients.filter((ing) =>
+              uniqueEnglish.some((p) => p.includes(ing) || ing.includes(p))
+            ).length;
+            return { ...meal, matchCount };
           })
-        );
+          .filter((m) => m.matchCount > 0)
+          .sort((a, b) => b.matchCount - a.matchCount);
 
-        setMeals(details);
+        setMeals(scored);
       } catch (error) {
         console.error("Error loading recipes:", error);
-        Alert.alert("Error", "No se pudieron cargar recetas. Intenta más tarde.");
+        Alert.alert("Error", "No se pudieron cargar recetas. Inténtalo más tarde.");
       } finally {
         setLoading(false);
       }
@@ -129,37 +278,15 @@ export function RecipesScreen() {
     load();
   }, []);
 
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!meals || meals.length === 0) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <EmptyState
-          icon="food-apple"
-          title="No hay recetas"
-          subtitle="No se encontraron recetas basadas en tu despensa"
-        />
-      </SafeAreaView>
-    );
-  }
-
-  const hasIngredient = (name: string) =>
-    availableProducts.some((p) => p.includes(name.toLowerCase()));
+  const hasIngredient = (ing: string) =>
+    pantryWords.some((p) => p.includes(ing.toLowerCase()) || ing.toLowerCase().includes(p));
 
   const filteredMeals = meals.filter((meal) => {
     const query = search.trim().toLowerCase();
     const matchesSearch =
       !query ||
       meal.strMeal.toLowerCase().includes(query) ||
-      meal.ingredients.some((ingredient) => ingredient.toLowerCase().includes(query));
+      meal.ingredients.some((i) => i.includes(query));
     const matchesFavorite = !favoritesOnly || favoriteIds.includes(meal.idMeal);
     return matchesSearch && matchesFavorite;
   });
@@ -168,15 +295,37 @@ export function RecipesScreen() {
     try {
       const next = await toggleRecipeFavoriteId(recipeId);
       setFavoriteIds(next);
-    } catch (error) {
-      console.error("Error toggling recipe favorite:", error);
+    } catch {
       Alert.alert("Error", "No se pudo actualizar el favorito");
     }
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Buscando recetas con tus ingredientes...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!meals.length) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <EmptyState
+          icon="food-apple"
+          title="Sin recetas"
+          subtitle="Añade productos a tu despensa para descubrir recetas que puedes preparar"
+        />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.toolbar}>
           <InputField
             placeholder="Buscar recetas o ingredientes"
@@ -198,77 +347,90 @@ export function RecipesScreen() {
               onPress={() => setFavoritesOnly(true)}
               style={[styles.filterChip, favoritesOnly && styles.filterChipActive]}
             >
+              <MaterialCommunityIcons
+                name="heart"
+                size={13}
+                color={favoritesOnly ? colors.white : colors.subtext}
+                style={{ marginRight: 2 }}
+              />
               <Text style={[styles.filterChipText, favoritesOnly && styles.filterChipTextActive]}>
                 Favoritas
               </Text>
             </Pressable>
           </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryText}>{filteredMeals.length} recetas</Text>
-            <Text style={styles.summarySubtext}>{favoriteIds.length} favoritas</Text>
-          </View>
+          <Text style={styles.summaryText}>
+            {filteredMeals.length} receta{filteredMeals.length !== 1 ? "s" : ""} · ordenadas por coincidencia
+          </Text>
         </View>
 
-        {filteredMeals.map((meal) => (
-          <View key={meal.idMeal} style={[styles.card, shadows.sm]}>
-            <Image source={{ uri: meal.strMealThumb }} style={styles.thumb} />
-            <View style={styles.cardBody}>
-              <Pressable
-                onPress={() => void handleToggleFavorite(meal.idMeal)}
-                hitSlop={10}
-                style={styles.favoriteButton}
-              >
-                <MaterialCommunityIcons
-                  name={favoriteIds.includes(meal.idMeal) ? "heart" : "heart-outline"}
-                  size={22}
-                  color={favoriteIds.includes(meal.idMeal) ? colors.error : colors.subtext}
-                />
-              </Pressable>
-              <Text style={styles.mealTitle}>{meal.strMeal}</Text>
-              {meal.strCategory ? (
-                <Text style={styles.category}>{meal.strCategory}</Text>
+        {filteredMeals.map((meal) => {
+          const pct = Math.round((meal.matchCount / meal.totalIngredients) * 100);
+          const isFav = favoriteIds.includes(meal.idMeal);
+          return (
+            <View key={meal.idMeal} style={[styles.card, shadows.sm]}>
+              {meal.strMealThumb ? (
+                <Image source={{ uri: meal.strMealThumb }} style={styles.thumb} />
               ) : null}
+              <View style={styles.cardBody}>
+                {/* Favorito */}
+                <Pressable
+                  onPress={() => void handleToggleFavorite(meal.idMeal)}
+                  hitSlop={10}
+                  style={styles.favoriteButton}
+                >
+                  <MaterialCommunityIcons
+                    name={isFav ? "heart" : "heart-outline"}
+                    size={22}
+                    color={isFav ? colors.error : colors.subtext}
+                  />
+                </Pressable>
 
-              <View style={styles.ingredientsRow}>
-                {meal.ingredients.slice(0, 6).map((ing) => {
-                  const ok = hasIngredient(ing);
-                  return (
-                    <View
-                      key={ing}
-                      style={[
-                        styles.ingredientBadge,
-                        ok ? styles.ingredientOk : styles.ingredientMissing,
-                      ]}
-                    >
-                      <MaterialCommunityIcons
-                        name={ok ? "check" : "close"}
-                        size={12}
-                        color={ok ? colors.white : colors.subtext}
-                      />
-                      <Text
-                        style={[
-                          styles.ingredientText,
-                          ok && { color: colors.white },
-                        ]}
+                <Text style={styles.mealTitle} numberOfLines={2}>{meal.strMeal}</Text>
+                {meal.strCategory ? (
+                  <Text style={styles.category}>{meal.strCategory}</Text>
+                ) : null}
+
+                {/* Barra de coincidencia */}
+                <View style={styles.matchRow}>
+                  <View style={styles.matchBarBg}>
+                    <View style={[styles.matchBarFill, { width: `${pct}%` as any }]} />
+                  </View>
+                  <Text style={styles.matchLabel}>
+                    {meal.matchCount}/{meal.totalIngredients} ingredientes
+                  </Text>
+                </View>
+
+                {/* Badges de ingredientes */}
+                <View style={styles.ingredientsRow}>
+                  {meal.ingredients.slice(0, 7).map((ing) => {
+                    const ok = hasIngredient(ing);
+                    return (
+                      <View
+                        key={ing}
+                        style={[styles.ingredientBadge, ok ? styles.ingredientOk : styles.ingredientMissing]}
                       >
-                        {ing}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
+                        <MaterialCommunityIcons
+                          name={ok ? "check" : "close"}
+                          size={11}
+                          color={ok ? colors.white : colors.subtext}
+                        />
+                        <Text style={[styles.ingredientText, ok && { color: colors.white }]} numberOfLines={1}>
+                          {ing}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                  {meal.ingredients.length > 7 ? (
+                    <Text style={styles.moreIngredients}>+{meal.ingredients.length - 7} más</Text>
+                  ) : null}
+                </View>
 
-              <View style={styles.actionsRow}>
                 <Pressable
                   onPress={() =>
                     navigation.navigate("RecipeDetail", {
                       recipe: meal,
-                      availableIngredients: meal.ingredients.filter((ingredient) =>
-                        hasIngredient(ingredient)
-                      ),
-                      missingIngredients: meal.ingredients.filter(
-                        (ingredient) => !hasIngredient(ingredient)
-                      ),
+                      availableIngredients: meal.ingredients.filter(hasIngredient),
+                      missingIngredients: meal.ingredients.filter((i) => !hasIngredient(i)),
                     })
                   }
                   style={styles.viewButton}
@@ -277,8 +439,8 @@ export function RecipesScreen() {
                 </Pressable>
               </View>
             </View>
-          </View>
-        ))}
+          );
+        })}
       </ScrollView>
     </SafeAreaView>
   );
@@ -286,18 +448,24 @@ export function RecipesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  center: { flex: 1, justifyContent: "center", alignItems: "center", gap: spacing.md },
+  loadingText: { ...typography.bodySm, color: colors.subtext, textAlign: "center", marginTop: spacing.sm },
   content: { padding: spacing.lg },
   toolbar: { marginBottom: spacing.lg },
   searchInput: { marginBottom: spacing.md },
   filterRow: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.md },
-  filterChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 999, backgroundColor: colors.secondary },
+  filterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 999,
+    backgroundColor: colors.secondary,
+  },
   filterChipActive: { backgroundColor: colors.primary },
-  filterChipText: { ...typography.bodySm, color: colors.text, fontWeight: "600" },
+  filterChipText: { ...typography.bodySm, color: colors.subtext, fontWeight: "600" },
   filterChipTextActive: { color: colors.white },
-  summaryRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  summaryText: { ...typography.bodySm, color: colors.text, fontWeight: "700" },
-  summarySubtext: { ...typography.bodySm, color: colors.subtext },
+  summaryText: { ...typography.bodySm, color: colors.subtext },
   card: {
     flexDirection: "row",
     backgroundColor: colors.white,
@@ -307,17 +475,43 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  thumb: { width: 120, height: 120 },
+  thumb: { width: 110, height: "100%" as any, minHeight: 130 },
   cardBody: { flex: 1, padding: spacing.md, position: "relative" },
   favoriteButton: { position: "absolute", top: spacing.sm, right: spacing.sm, zIndex: 1 },
-  mealTitle: { ...typography.h3, color: colors.text, marginBottom: spacing.xs },
+  mealTitle: { ...typography.h3, color: colors.text, marginBottom: spacing.xs, paddingRight: 28 },
   category: { ...typography.bodySm, color: colors.subtext, marginBottom: spacing.sm },
-  ingredientsRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  ingredientBadge: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 6, borderRadius: 999, marginRight: spacing.sm, marginBottom: spacing.sm },
+  matchRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.sm },
+  matchBarBg: {
+    flex: 1,
+    height: 6,
+    backgroundColor: colors.secondary,
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  matchBarFill: {
+    height: "100%",
+    backgroundColor: colors.primary,
+    borderRadius: 999,
+  },
+  matchLabel: { ...typography.caption, color: colors.subtext, minWidth: 90 },
+  ingredientsRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginBottom: spacing.sm },
+  ingredientBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
   ingredientOk: { backgroundColor: colors.primary },
   ingredientMissing: { backgroundColor: colors.secondary, borderWidth: 1, borderColor: colors.border },
-  ingredientText: { ...typography.caption, color: colors.text, marginLeft: 6 },
-  actionsRow: { marginTop: spacing.sm, flexDirection: "row", justifyContent: "flex-end" },
-  viewButton: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.primary, borderRadius: borderRadius.sm },
+  ingredientText: { ...typography.caption, color: colors.text, marginLeft: 3 },
+  moreIngredients: { ...typography.caption, color: colors.subtext, alignSelf: "center" },
+  viewButton: {
+    alignSelf: "flex-start",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.sm,
+  },
   viewButtonText: { ...typography.bodySm, color: colors.white, fontWeight: "700" },
 });

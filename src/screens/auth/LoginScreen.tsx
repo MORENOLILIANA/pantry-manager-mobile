@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { ScrollView, StyleSheet, Text, View, SafeAreaView, Pressable } from "react-native";
+import { ScrollView, StyleSheet, Text, View, SafeAreaView, Pressable, KeyboardAvoidingView, Platform } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -18,7 +18,7 @@ type FormValues = {
 };
 
 export function LoginScreen() {
-  const { control, handleSubmit, formState: { errors } } = useForm<FormValues>({
+  const { control, handleSubmit, formState: { errors }, setError } = useForm<FormValues>({
     defaultValues: { email: "", password: "" }
   });
   const { signIn } = useAuth();
@@ -32,9 +32,27 @@ export function LoginScreen() {
       setApiError(null);
       setLoading(true);
       await signIn(values.email, values.password);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Revisa tus credenciales.";
-      setApiError(message);
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { status?: number; data?: { errors?: Record<string, string[]>; message?: string } } };
+      const status = axiosError?.response?.status;
+      const serverErrors = axiosError?.response?.data?.errors;
+      const serverMessage = axiosError?.response?.data?.message;
+
+      if (serverErrors) {
+        if (serverErrors.email) setError("email", { message: serverErrors.email[0] });
+        if (serverErrors.password) setError("password", { message: serverErrors.password[0] });
+        if (!serverErrors.email && !serverErrors.password) setApiError(Object.values(serverErrors)[0][0]);
+      } else if (status === 401 || status === 403) {
+        setApiError("Email o contraseña incorrectos.");
+      } else if (status === 404) {
+        setError("email", { message: "No existe ninguna cuenta con este email." });
+      } else if (status === 422 && serverMessage) {
+        setApiError(serverMessage);
+      } else if (error instanceof Error) {
+        setApiError(error.message);
+      } else {
+        setApiError("Revisa tus credenciales.");
+      }
     } finally {
       setLoading(false);
     }
@@ -42,9 +60,11 @@ export function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView 
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
+      <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Logo */}
         <View style={styles.logoSection}>
@@ -63,10 +83,10 @@ export function LoginScreen() {
             control={control}
             name="email"
             rules={{
-              required: "El email es requerido",
+              required: "El email es obligatorio.",
               pattern: {
                 value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                message: "Email inválido"
+                message: "Introduce un email válido (ej: nombre@dominio.com)."
               }
             }}
             render={({ field: { onChange, onBlur, value } }) => (
@@ -170,6 +190,7 @@ export function LoginScreen() {
           </Text>
         </Pressable>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -178,6 +199,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.white,
+  },
+  flex: {
+    flex: 1,
   },
   scrollContent: {
     paddingHorizontal: spacing.xl,

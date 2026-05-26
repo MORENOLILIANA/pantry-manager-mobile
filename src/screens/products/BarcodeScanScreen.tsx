@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   StyleSheet,
   View,
@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   TextInput,
 } from "react-native";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RouteProp } from "@react-navigation/native";
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
@@ -29,6 +29,38 @@ interface BarcodeData {
   category?: string;
 }
 
+async function lookupOpenFoodFacts(barcode: string): Promise<BarcodeData | null> {
+  try {
+    const res = await fetch(
+      `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=product_name,product_name_es,brands,categories,categories_tags`
+    );
+    const json = await res.json();
+    if (json?.status !== 1 || !json?.product) return null;
+
+    const p = json.product;
+    const name: string =
+      p.product_name_es?.trim() ||
+      p.product_name?.trim() ||
+      "";
+    if (!name) return null;
+
+    // Categoría: usar la primera etiqueta legible (quitar prefijo "en:" o "es:")
+    const rawCategory: string =
+      p.categories?.split(",")[0]?.trim() ||
+      p.categories_tags?.[0]?.replace(/^[a-z]{2}:/, "") ||
+      "";
+
+    return {
+      barcode,
+      name,
+      brand: p.brands?.split(",")[0]?.trim() || "",
+      category: rawCategory,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function BarcodeScanScreen() {
   const navigation = useNavigation<Navigation>();
   const route = useRoute<Route>();
@@ -40,6 +72,13 @@ export function BarcodeScanScreen() {
   const [loading, setLoading] = useState(false);
   const [manualInputVisible, setManualInputVisible] = useState(false);
   const [manualBarcode, setManualBarcode] = useState("");
+
+  useFocusEffect(
+    useCallback(() => {
+      setScanned(false);
+      setLoading(false);
+    }, [])
+  );
 
   const handleBarcodeLike = async (barcode: string) => {
     if (scanned || loading) return;
@@ -55,78 +94,77 @@ export function BarcodeScanScreen() {
         /* ignore */
       }
 
-      // 1) Intentar obtener producto local
+      // 1) Base de datos local del backend
       try {
-        const res = await apiClient.get(`/api/v1/products/barcode/${encodeURIComponent(barcode)}`);
-        const product = res.data;
-
-        const barcodeData: BarcodeData = {
-          barcode: product.barcode || barcode,
-          name: product.name,
-          brand: product.brand,
-          category: product.category,
-        };
-
-        navigation.navigate("Products", {
-          pantryId,
-          mode: "add",
-          barcodeData,
-        } as any);
-
-        // keep scanned true to avoid double-handling until screen change
-        setLoading(false);
-        return;
+        const res = await apiClient.get(`/products/barcode/${encodeURIComponent(barcode)}`);
+        const product = res.data?.data ?? res.data;
+        if (product?.name) {
+          navigation.navigate("Products", {
+            pantryId,
+            mode: "add",
+            barcodeData: {
+              barcode: product.barcode || barcode,
+              name: product.name,
+              brand: product.brand,
+              category: product.category,
+            },
+          } as any);
+          setLoading(false);
+          return;
+        }
       } catch (err: any) {
-        // si es 404, seguimos con la llamada nutricional
-        const status = err?.response?.status;
-        if (status !== 404) throw err;
+        if (err?.response?.status !== 404) throw err;
       }
 
-      // 3) Producto no en DB local -> obtener datos nutricionales (backend consulta OpenFoodFacts)
+      // 2) Endpoint nutricional del backend (si el backend consulta OpenFoodFacts por su lado)
       try {
-        const nut = await apiClient.get(`/api/v1/products/barcode/${encodeURIComponent(barcode)}/nutritional`);
-        const payload = nut.data;
+        const nut = await apiClient.get(`/products/barcode/${encodeURIComponent(barcode)}/nutritional`);
+        const payload = nut.data?.data ?? nut.data;
+        const name = payload?.name || payload?.product_name || "";
+        if (name) {
+          navigation.navigate("Products", {
+            pantryId,
+            mode: "add",
+            barcodeData: {
+              barcode,
+              name,
+              brand: payload.brand || payload.brands || "",
+              category: payload.category || payload.categories || "",
+            },
+          } as any);
+          setLoading(false);
+          return;
+        }
+      } catch {
+        // sigue al siguiente paso
+      }
 
-        const barcodeData: BarcodeData = {
-          barcode,
-          name: payload.name || payload.product_name || "",
-          brand: payload.brand || payload.brands || "",
-          category: payload.category || payload.categories || "",
-        };
-
+      // 3) Open Food Facts directamente desde la app (3M+ productos mundiales)
+      const offProduct = await lookupOpenFoodFacts(barcode);
+      if (offProduct) {
         navigation.navigate("Products", {
           pantryId,
           mode: "add",
-          barcodeData,
+          barcodeData: offProduct,
         } as any);
-
         setLoading(false);
         return;
-      } catch (nutErr: any) {
-        console.warn("Nutritional lookup failed:", nutErr?.message || nutErr);
       }
 
-      // 4) Si todo falla mostrar Alert con opción de añadir manualmente (sin datos)
+      // 4) Producto desconocido → el usuario rellena manualmente
       Alert.alert(
         "Producto no encontrado",
-        `Código: ${barcode}`,
+        "No se encontró este código en ninguna base de datos. Puedes rellenar los datos manualmente.",
         [
           {
             text: "Cancelar",
-            onPress: () => {
-              setScanned(false);
-              setLoading(false);
-            },
+            onPress: () => { setScanned(false); setLoading(false); },
             style: "cancel",
           },
           {
             text: "Añadir manualmente",
             onPress: () => {
-              // Volver a Products sin datos
-              navigation.navigate("Products", {
-                pantryId,
-                mode: "add",
-              } as any);
+              navigation.navigate("Products", { pantryId, mode: "add" } as any);
               setScanned(false);
               setLoading(false);
             },
@@ -136,24 +174,9 @@ export function BarcodeScanScreen() {
       );
     } catch (error) {
       console.error("Error scanning barcode:", error);
-      Alert.alert("Producto no encontrado", "¿Deseas añadirlo manualmente?", [
-        {
-          text: "Cancelar",
-          onPress: () => {
-            setScanned(false);
-            setLoading(false);
-          },
-          style: "cancel",
-        },
-        {
-          text: "Añadir manualmente",
-          onPress: () => {
-            navigation.navigate("Products", { pantryId, mode: "add" } as any);
-            setScanned(false);
-            setLoading(false);
-          },
-        },
-      ]);
+      setScanned(false);
+      setLoading(false);
+      Alert.alert("Error", "No se pudo leer el código. Inténtalo de nuevo.");
     }
   };
 

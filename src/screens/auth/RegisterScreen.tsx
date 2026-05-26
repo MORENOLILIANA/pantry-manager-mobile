@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { ScrollView, StyleSheet, Text, View, SafeAreaView, Pressable } from "react-native";
+import { ScrollView, StyleSheet, Text, View, SafeAreaView, Pressable, KeyboardAvoidingView, Platform } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -21,7 +21,9 @@ type FormValues = {
 
 export function RegisterScreen() {
   const { control, handleSubmit, formState: { errors }, watch } = useForm<FormValues>({
-    defaultValues: { name: "", email: "", password: "", passwordConfirmation: "" }
+    defaultValues: { name: "", email: "", password: "", passwordConfirmation: "" },
+    mode: "onBlur",
+    reValidateMode: "onChange",
   });
   const { signUp } = useAuth();
   const navigation = useNavigation<Navigation>();
@@ -29,6 +31,7 @@ export function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const passwordValue = watch("password");
 
   async function onSubmit(values: FormValues) {
@@ -38,10 +41,24 @@ export function RegisterScreen() {
     }
     try {
       setApiError(null);
+      setSuccessMessage(null);
       setLoading(true);
-      await signUp(values.name, values.email, values.password, values.passwordConfirmation);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Revisa los datos del formulario.";
+      const { needsLogin } = await signUp(values.name, values.email, values.password, values.passwordConfirmation);
+      if (needsLogin) {
+        setSuccessMessage("¡Cuenta creada! Inicia sesión para continuar.");
+        setTimeout(() => navigation.navigate("Login"), 1500);
+      }
+    } catch (error: unknown) {
+      let message = "Revisa los datos del formulario.";
+      const axiosError = error as { response?: { data?: { errors?: Record<string, string[]>; message?: string } } };
+      if (axiosError?.response?.data?.errors) {
+        const firstKey = Object.keys(axiosError.response.data.errors)[0];
+        message = axiosError.response.data.errors[firstKey][0];
+      } else if (axiosError?.response?.data?.message) {
+        message = axiosError.response.data.message;
+      } else if (error instanceof Error) {
+        message = error.message;
+      }
       setApiError(message);
     } finally {
       setLoading(false);
@@ -50,9 +67,11 @@ export function RegisterScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView 
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
+      <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Logo */}
         <View style={styles.logoSection}>
@@ -90,10 +109,10 @@ export function RegisterScreen() {
             control={control}
             name="email"
             rules={{
-              required: "El email es requerido",
+              required: "El email es obligatorio.",
               pattern: {
                 value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                message: "Email inválido"
+                message: "Introduce un email válido (ej: nombre@dominio.com)."
               }
             }}
             render={({ field: { onChange, onBlur, value } }) => (
@@ -116,7 +135,7 @@ export function RegisterScreen() {
             name="password"
             rules={{
               required: "La contraseña es requerida",
-              minLength: { value: 6, message: "Mínimo 6 caracteres" }
+              minLength: { value: 8, message: "Mínimo 8 caracteres" }
             }}
             render={({ field: { onChange, onBlur, value } }) => (
               <View>
@@ -153,8 +172,8 @@ export function RegisterScreen() {
             control={control}
             name="passwordConfirmation"
             rules={{
-              required: "Confirma tu contraseña",
-              validate: (value) => value === passwordValue || "Las contraseñas no coinciden"
+              required: "Confirma tu contraseña.",
+              validate: (value) => value === passwordValue || "Las contraseñas no coinciden."
             }}
             render={({ field: { onChange, onBlur, value } }) => (
               <View>
@@ -187,7 +206,12 @@ export function RegisterScreen() {
             )}
           />
 
-          {/* Error del API */}
+          {successMessage && (
+            <View style={[styles.errorBox, { backgroundColor: "#e6f4ea" }]}>
+              <MaterialCommunityIcons name="check-circle" size={18} color="#2e7d32" />
+              <Text style={[styles.errorText, { color: "#2e7d32" }]}>{successMessage}</Text>
+            </View>
+          )}
           {apiError && (
             <View style={styles.errorBox}>
               <MaterialCommunityIcons name="alert-circle" size={18} color={colors.error} />
@@ -213,6 +237,7 @@ export function RegisterScreen() {
           </Text>
         </Pressable>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -221,6 +246,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.white,
+  },
+  flex: {
+    flex: 1,
   },
   scrollContent: {
     paddingHorizontal: spacing.xl,

@@ -2,12 +2,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -192,63 +192,64 @@ export function GroupsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Grupos y compartidos</Text>
-          <Text style={styles.subtitle}>Organiza hogares, comparte listas y gestiona miembros.</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Grupos y compartidos</Text>
+            <Text style={styles.subtitle}>Organiza hogares, comparte listas y gestiona miembros.</Text>
+          </View>
+          <Pressable onPress={refresh} style={styles.iconButton}>
+            <MaterialCommunityIcons name="refresh" size={22} color={colors.primary} />
+          </Pressable>
         </View>
-        <Pressable onPress={refresh} style={styles.iconButton}>
-          <MaterialCommunityIcons name="refresh" size={22} color={colors.primary} />
-        </Pressable>
-      </View>
 
-      <View style={styles.actionsRow}>
-        <PrimaryButton title="Crear grupo" onPress={() => setModalMode("create")} style={styles.actionButton} />
-        <PrimaryButton title="Unirme con código" onPress={() => setModalMode("join")} variant="secondary" style={styles.actionButton} />
-      </View>
+        {/* Botones crear / unirse */}
+        <View style={styles.actionsRow}>
+          <PrimaryButton title="Crear grupo" onPress={() => setModalMode("create")} style={styles.actionButton} />
+          <PrimaryButton title="Unirme con código" onPress={() => setModalMode("join")} variant="secondary" style={styles.actionButton} />
+        </View>
 
-      {selectedGroup ? (
-        <View style={[styles.card, shadows.sm]}>
-          <View style={styles.cardHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.groupName}>{selectedGroup.name}</Text>
-              <Text style={styles.groupMeta}>Código: {selectedGroup.inviteCode}</Text>
-            </View>
-            {activeGroupId === selectedGroup.id ? (
-              <View style={styles.activeBadge}>
-                <Text style={styles.activeBadgeText}>Activo</Text>
+        {/* Tarjeta grupo seleccionado */}
+        {selectedGroup ? (
+          <View style={[styles.card, shadows.sm]}>
+            <View style={styles.cardHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.groupName}>{selectedGroup.name}</Text>
+                <Text style={styles.groupMeta}>Código: {selectedGroup.inviteCode}</Text>
               </View>
-            ) : null}
-          </View>
-
-          <View style={styles.metricsRow}>
-            <View style={styles.metricBox}>
-              <Text style={styles.metricValue}>{selectedGroup.members.length}</Text>
-              <Text style={styles.metricLabel}>Miembros</Text>
+              {activeGroupId === selectedGroup.id && (
+                <View style={styles.activeBadge}>
+                  <Text style={styles.activeBadgeText}>Activo</Text>
+                </View>
+              )}
             </View>
-            <View style={styles.metricBox}>
-              <Text style={styles.metricValue}>{selectedGroup.sharedShoppingListId ? 1 : 0}</Text>
-              <Text style={styles.metricLabel}>Lista vinculada</Text>
+
+            <View style={styles.metricsRow}>
+              <View style={styles.metricBox}>
+                <Text style={styles.metricValue}>{selectedGroup.members.length}</Text>
+                <Text style={styles.metricLabel}>Miembros</Text>
+              </View>
+              <View style={styles.metricBox}>
+                <Text style={styles.metricValue}>{selectedGroup.sharedShoppingListId ? 1 : 0}</Text>
+                <Text style={styles.metricLabel}>Lista vinculada</Text>
+              </View>
             </View>
-          </View>
 
-          <View style={styles.cardActions}>
-            <Pressable onPress={() => setModalMode("member")} style={styles.inlineAction}>
-              <MaterialCommunityIcons name="account-plus" size={18} color={colors.primary} />
-              <Text style={styles.inlineActionText}>Añadir miembro</Text>
-            </Pressable>
-            <Pressable onPress={handleShareActiveList} style={styles.inlineAction}>
-              <MaterialCommunityIcons name="share-variant" size={18} color={colors.primary} />
-              <Text style={styles.inlineActionText}>Vincular lista activa</Text>
-            </Pressable>
-          </View>
+            <View style={styles.cardActions}>
+              <Pressable onPress={() => setModalMode("member")} style={styles.inlineAction}>
+                <MaterialCommunityIcons name="account-plus" size={18} color={colors.primary} />
+                <Text style={styles.inlineActionText}>Añadir miembro</Text>
+              </Pressable>
+              <Pressable onPress={handleShareActiveList} style={styles.inlineAction}>
+                <MaterialCommunityIcons name="share-variant" size={18} color={colors.primary} />
+                <Text style={styles.inlineActionText}>Vincular lista activa</Text>
+              </Pressable>
+            </View>
 
-          <Text style={styles.sectionLabel}>Miembros</Text>
-          <FlatList
-            data={selectedGroup.members}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <View style={styles.memberRow}>
+            <Text style={styles.sectionLabel}>Miembros</Text>
+            {selectedGroup.members.map((item) => (
+              <View key={item.id} style={styles.memberRow}>
                 <View style={styles.memberAvatar}>
                   <MaterialCommunityIcons name={item.role === "owner" ? "shield-account" : "account"} size={18} color={colors.white} />
                 </View>
@@ -257,41 +258,46 @@ export function GroupsScreen() {
                   <Text style={styles.memberRole}>{item.role === "owner" ? "Propietario" : "Miembro"}</Text>
                 </View>
               </View>
-            )}
-            scrollEnabled={false}
+            ))}
+          </View>
+        ) : (
+          <EmptyState
+            icon="account-group-outline"
+            title="No tienes grupos"
+            subtitle="Crea un grupo o únete con un código para compartir listas"
           />
-        </View>
-      ) : (
-        <EmptyState
-          icon="account-group-outline"
-          title="No tienes grupos"
-          subtitle="Crea un grupo o únete con un código para compartir listas"
-        />
-      )}
-
-      <View style={styles.groupListHeader}>
-        <Text style={styles.sectionLabel}>Mis grupos</Text>
-        <Text style={styles.sectionHint}>{groups.length} guardados</Text>
-      </View>
-
-      <FlatList
-        data={groups}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.groupList}
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => void handleSelectGroup(item.id)}
-            style={[styles.groupRow, item.id === selectedGroupId && styles.groupRowActive, shadows.sm]}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.groupRowTitle}>{item.name}</Text>
-              <Text style={styles.groupRowSubtitle}>{item.members.length} miembros · código {item.inviteCode}</Text>
-            </View>
-            <MaterialCommunityIcons name={item.id === selectedGroupId ? "check-circle" : "chevron-right"} size={22} color={item.id === selectedGroupId ? colors.primary : colors.subtext} />
-          </Pressable>
         )}
-        ListEmptyComponent={<View style={{ height: 8 }} />}
-      />
+
+        {/* Lista de todos los grupos */}
+        <View style={styles.groupListHeader}>
+          <Text style={styles.sectionLabel}>Mis grupos ({groups.length})</Text>
+          <Pressable onPress={refresh}>
+            <Text style={styles.sectionHint}>Actualizar</Text>
+          </Pressable>
+        </View>
+
+        {groups.length === 0 ? (
+          <Text style={styles.emptyHint}>Aún no tienes ningún grupo.</Text>
+        ) : (
+          groups.map((item) => (
+            <Pressable
+              key={item.id}
+              onPress={() => void handleSelectGroup(item.id)}
+              style={[styles.groupRow, item.id === selectedGroupId && styles.groupRowActive, shadows.sm]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.groupRowTitle}>{item.name}</Text>
+                <Text style={styles.groupRowSubtitle}>{item.members.length} miembros · código {item.inviteCode}</Text>
+              </View>
+              <MaterialCommunityIcons
+                name={item.id === selectedGroupId ? "check-circle" : "chevron-right"}
+                size={22}
+                color={item.id === selectedGroupId ? colors.primary : colors.subtext}
+              />
+            </Pressable>
+          ))
+        )}
+      </ScrollView>
 
       <Modal visible={modalMode !== null} transparent animationType="fade" onRequestClose={() => setModalMode(null)}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
@@ -344,7 +350,8 @@ export function GroupsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  header: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.md, flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: spacing.md },
+  scrollContent: { paddingBottom: spacing.xxl },
+  header: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.md, flexDirection: "row", alignItems: "flex-start", gap: spacing.md },
   title: { ...typography.h2, color: colors.text },
   subtitle: { ...typography.bodySm, color: colors.subtext, marginTop: spacing.xs },
   iconButton: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: colors.secondary },
@@ -368,10 +375,10 @@ const styles = StyleSheet.create({
   memberAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   memberName: { ...typography.body, color: colors.text, fontWeight: "600" },
   memberRole: { ...typography.caption, color: colors.subtext },
-  groupListHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: spacing.xl, marginBottom: spacing.sm },
-  sectionHint: { ...typography.caption, color: colors.subtext },
-  groupList: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xl },
-  groupRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, backgroundColor: colors.white, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.md },
+  groupListHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: spacing.xl, marginTop: spacing.md, marginBottom: spacing.md },
+  sectionHint: { ...typography.caption, color: colors.primary, fontWeight: "600" },
+  emptyHint: { ...typography.bodySm, color: colors.subtext, textAlign: "center", paddingHorizontal: spacing.xl, marginTop: spacing.md },
+  groupRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, marginHorizontal: spacing.xl, backgroundColor: colors.white, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.md },
   groupRowActive: { borderColor: colors.primary, backgroundColor: colors.secondary },
   groupRowTitle: { ...typography.body, color: colors.text, fontWeight: "700" },
   groupRowSubtitle: { ...typography.caption, color: colors.subtext, marginTop: spacing.xs },

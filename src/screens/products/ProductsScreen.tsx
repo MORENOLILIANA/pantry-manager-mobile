@@ -61,7 +61,7 @@ export function ProductsScreen() {
   const params = (route.params as any) || {};
   const { pantryId, mode = "add", item, itemId, barcodeData } = params;
 
-  const { control, handleSubmit, watch, setValue } = useForm<FormData>({
+  const { control, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormData>({
     defaultValues: {
       productName:
         barcodeData?.name || item?.product.name || "",
@@ -149,12 +149,17 @@ export function ProductsScreen() {
       }
 
       navigation.goBack();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving item:", error);
-      Alert.alert(
-        "Error",
-        "No se pudo guardar el producto. Intenta nuevamente."
-      );
+      const serverErrors = error?.response?.data?.errors;
+      const serverMessage = error?.response?.data?.message;
+      let msg = "No se pudo guardar el producto.";
+      if (serverErrors) {
+        msg = Object.values(serverErrors as Record<string, string[]>).flat().join("\n");
+      } else if (serverMessage) {
+        msg = serverMessage;
+      }
+      Alert.alert("Error", msg);
     } finally {
       setLoading(false);
     }
@@ -224,13 +229,14 @@ export function ProductsScreen() {
               <Controller
                 control={control}
                 name="productName"
-                rules={{ required: "El nombre es requerido" }}
+                rules={{ required: "El nombre del producto es obligatorio." }}
                 render={({ field: { value, onChange } }) => (
                   <InputField
                     label=""
                     value={value}
                     onChangeText={onChange}
                     placeholder="Ej: Leche"
+                    error={errors.productName?.message}
                     style={styles.expandedInput}
                   />
                 )}
@@ -283,7 +289,10 @@ export function ProductsScreen() {
             <Controller
               control={control}
               name="quantity"
-              rules={{ required: "La cantidad es requerida" }}
+              rules={{
+                required: "La cantidad es obligatoria.",
+                validate: (v) => parseFloat(v) > 0 || "La cantidad debe ser mayor que 0."
+              }}
               render={({ field: { value, onChange } }) => (
                 <InputField
                   label="Cantidad"
@@ -291,6 +300,7 @@ export function ProductsScreen() {
                   onChangeText={onChange}
                   placeholder="1"
                   keyboardType="decimal-pad"
+                  error={errors.quantity?.message}
                   containerStyle={styles.halfInput}
                 />
               )}
