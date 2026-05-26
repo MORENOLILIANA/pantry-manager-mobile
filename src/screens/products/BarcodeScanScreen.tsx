@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -18,6 +18,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, borderRadius, typography } from "@/config/theme";
 import type { PantriesStackParamList } from "@/navigation/stacks/AppStack";
 import { apiClient } from "@/api/client";
+import { getPantries } from "@/api/pantries";
 
 type Navigation = NativeStackNavigationProp<PantriesStackParamList>;
 type Route = RouteProp<PantriesStackParamList, "BarcodeScan">;
@@ -65,13 +66,25 @@ export function BarcodeScanScreen() {
   const navigation = useNavigation<Navigation>();
   const route = useRoute<Route>();
 
-  const { pantryId } = (route.params as any) || {};
+  const { pantryId: routePantryId } = (route.params as any) || {};
 
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
   const [manualInputVisible, setManualInputVisible] = useState(false);
   const [manualBarcode, setManualBarcode] = useState("");
+  const [resolvedPantryId, setResolvedPantryId] = useState<string | undefined>(routePantryId);
+
+  // Si no viene pantryId (acceso desde la pestaña), carga la primera despensa
+  useEffect(() => {
+    if (!routePantryId) {
+      getPantries()
+        .then((pantries) => {
+          if (pantries?.length) setResolvedPantryId(pantries[0].id);
+        })
+        .catch(() => {});
+    }
+  }, [routePantryId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -79,6 +92,21 @@ export function BarcodeScanScreen() {
       setLoading(false);
     }, [])
   );
+
+  // Navega a Products usando siempre navegación cruzada (funciona desde tab y desde stack)
+  const goToProducts = (params: Record<string, any>) => {
+    if (!resolvedPantryId) {
+      Alert.alert("Sin despensa", "Crea primero una despensa desde la sección Mi Despensa.");
+      setScanned(false);
+      setLoading(false);
+      return;
+    }
+    (navigation as any).navigate("PantriesStack", {
+      screen: "Products",
+      params: { pantryId: resolvedPantryId, ...params },
+    });
+    setLoading(false);
+  };
 
   const handleBarcodeLike = async (barcode: string) => {
     if (scanned || loading) return;
@@ -99,17 +127,7 @@ export function BarcodeScanScreen() {
         const res = await apiClient.get(`/products/barcode/${encodeURIComponent(barcode)}`);
         const product = res.data?.data ?? res.data;
         if (product?.name) {
-          navigation.navigate("Products", {
-            pantryId,
-            mode: "add",
-            barcodeData: {
-              barcode: product.barcode || barcode,
-              name: product.name,
-              brand: product.brand,
-              category: product.category,
-            },
-          } as any);
-          setLoading(false);
+          goToProducts({ mode: "add", barcodeData: { barcode: product.barcode || barcode, name: product.name, brand: product.brand, category: product.category } });
           return;
         }
       } catch (err: any) {
@@ -122,17 +140,7 @@ export function BarcodeScanScreen() {
         const payload = nut.data?.data ?? nut.data;
         const name = payload?.name || payload?.product_name || "";
         if (name) {
-          navigation.navigate("Products", {
-            pantryId,
-            mode: "add",
-            barcodeData: {
-              barcode,
-              name,
-              brand: payload.brand || payload.brands || "",
-              category: payload.category || payload.categories || "",
-            },
-          } as any);
-          setLoading(false);
+          goToProducts({ mode: "add", barcodeData: { barcode, name, brand: payload.brand || payload.brands || "", category: payload.category || payload.categories || "" } });
           return;
         }
       } catch {
@@ -142,12 +150,7 @@ export function BarcodeScanScreen() {
       // 3) Open Food Facts directamente desde la app (3M+ productos mundiales)
       const offProduct = await lookupOpenFoodFacts(barcode);
       if (offProduct) {
-        navigation.navigate("Products", {
-          pantryId,
-          mode: "add",
-          barcodeData: offProduct,
-        } as any);
-        setLoading(false);
+        goToProducts({ mode: "add", barcodeData: offProduct });
         return;
       }
 
@@ -164,9 +167,8 @@ export function BarcodeScanScreen() {
           {
             text: "Añadir manualmente",
             onPress: () => {
-              navigation.navigate("Products", { pantryId, mode: "add" } as any);
               setScanned(false);
-              setLoading(false);
+              goToProducts({ mode: "add" });
             },
           },
         ],
@@ -243,6 +245,7 @@ export function BarcodeScanScreen() {
             "upc_e",
             "code128",
             "code39",
+            "qr",
           ],
         }}
       >

@@ -59,19 +59,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function signIn(email: string, password: string) {
-    // DEMO LOGIN - Para testing sin API (remover después)
-    if (email === "demo@test.com" && password === "demo") {
-      const demoUser: AuthUser = {
-        id: 999,
-        name: "Demo User",
-        email: "demo@test.com",
-        role: "user",
-        is_admin: false
-      };
-      await persistSession("demo_token_12345", demoUser);
-      return;
-    }
-    
     const response = await apiLogin({ email, password });
     const nextToken = response.token ?? response.access_token;
 

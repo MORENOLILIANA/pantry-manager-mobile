@@ -147,15 +147,6 @@ export function LoginScreen() {
             </View>
           )}
 
-          {/* Demo Credentials Box */}
-          <View style={styles.demoBox}>
-            <MaterialCommunityIcons name="information" size={16} color={colors.info} />
-            <View style={styles.demoContent}>
-              <Text style={styles.demoLabel}>Credenciales de demo:</Text>
-              <Text style={styles.demoValue}>Email: demo@test.com</Text>
-              <Text style={styles.demoValue}>Contraseña: demo</Text>
-            </View>
-          </View>
         </View>
 
         {/* Botón Iniciar Sesión */}

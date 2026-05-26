@@ -82,8 +82,8 @@ export async function getPantry(id: string): Promise<Pantry> {
  * Crea una nueva despensa
  */
 export async function createPantry(data: CreatePantryData): Promise<Pantry> {
-  const response = await apiClient.post<{ data: Pantry }>("/pantries", data);
-  return response.data.data;
+  const response = await apiClient.post<any>("/pantries", data);
+  return response.data?.data ?? response.data;
 }
 
 /**
