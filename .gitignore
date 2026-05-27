@@ -9,3 +9,4 @@ ios/
 *.log
 .env
 .env.*
+.claude/
