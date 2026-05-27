@@ -60,7 +60,8 @@ async function lookupOpenFoodFacts(barcode: string): Promise<BarcodeData | null>
     if (n["fiber_100g"] != null)          nutritionalInfo.fiber = n["fiber_100g"];
     if (n["sugars_100g"] != null)         nutritionalInfo.sugars = n["sugars_100g"];
     if (n["salt_100g"] != null)           nutritionalInfo.salt = n["salt_100g"];
-    if (p.nutrition_grades)               nutritionalInfo.nutriscore = p.nutrition_grades.toUpperCase();
+    const ns = p.nutrition_grades?.toUpperCase();
+    if (ns && ["A","B","C","D","E"].includes(ns)) nutritionalInfo.nutriscore = ns;
     const hasNutri = Object.keys(nutritionalInfo).length > 0;
 
     return {
@@ -179,48 +180,58 @@ export function BarcodeScanScreen() {
     setLoading(true);
 
     try {
-      // simple vibration feedback; avoids expo-haptics web bundling issues
       try {
         if (Platform.OS !== "web") Vibration.vibrate(50);
-      } catch (e) {
-        /* ignore */
+      } catch { /* ignore */ }
+
+      // Backend y Open Food Facts en paralelo para obtener nombre + datos nutricionales
+      const [backendResult, offResult] = await Promise.allSettled([
+        (async () => {
+          // 1) Base de datos local
+          try {
+            const res = await apiClient.get(`/products/barcode/${encodeURIComponent(barcode)}`);
+            const p = res.data?.data ?? res.data;
+            if (p?.name) return { name: p.name as string, brand: p.brand as string, category: p.category as string, barcode: (p.barcode || barcode) as string };
+          } catch (err: any) {
+            if (!err?.response) throw err;
+          }
+          // 2) Endpoint nutricional del backend
+          try {
+            const nut = await apiClient.get(`/products/barcode/${encodeURIComponent(barcode)}/nutritional`);
+            const payload = nut.data?.data ?? nut.data;
+            const name: string = payload?.name || payload?.product_name || "";
+            if (name) return { name, brand: (payload.brand || payload.brands || "") as string, category: (payload.category || payload.categories || "") as string, barcode };
+          } catch { /* sigue */ }
+          return null;
+        })(),
+        lookupOpenFoodFacts(barcode),
+      ]);
+
+      const backendProduct = backendResult.status === "fulfilled" ? backendResult.value : null;
+      const offProduct    = offResult.status === "fulfilled"    ? offResult.value    : null;
+
+      if (backendProduct) {
+        // Producto encontrado en backend → enriquecer con datos nutricionales de OFF si los hay
+        goToProducts({
+          mode: "add",
+          barcodeData: {
+            barcode:         backendProduct.barcode,
+            name:            backendProduct.name,
+            brand:           backendProduct.brand,
+            category:        backendProduct.category,
+            nutritionalInfo: offProduct?.nutritionalInfo,
+            image_url:       offProduct?.image_url,
+          },
+        });
+        return;
       }
 
-      // 1) Base de datos local del backend
-      try {
-        const res = await apiClient.get(`/products/barcode/${encodeURIComponent(barcode)}`);
-        const product = res.data?.data ?? res.data;
-        if (product?.name) {
-          goToProducts({ mode: "add", barcodeData: { barcode: product.barcode || barcode, name: product.name, brand: product.brand, category: product.category } });
-          return;
-        }
-      } catch (err: any) {
-        // Solo relanzar si es un error de red (sin respuesta del servidor)
-        // Cualquier respuesta HTTP (404, 500, etc.) = no encontrado → continuar
-        if (!err?.response) throw err;
-      }
-
-      // 2) Endpoint nutricional del backend (si el backend consulta OpenFoodFacts por su lado)
-      try {
-        const nut = await apiClient.get(`/products/barcode/${encodeURIComponent(barcode)}/nutritional`);
-        const payload = nut.data?.data ?? nut.data;
-        const name = payload?.name || payload?.product_name || "";
-        if (name) {
-          goToProducts({ mode: "add", barcodeData: { barcode, name, brand: payload.brand || payload.brands || "", category: payload.category || payload.categories || "" } });
-          return;
-        }
-      } catch {
-        // sigue al siguiente paso
-      }
-
-      // 3) Open Food Facts directamente desde la app (3M+ productos mundiales)
-      const offProduct = await lookupOpenFoodFacts(barcode);
       if (offProduct) {
         goToProducts({ mode: "add", barcodeData: offProduct });
         return;
       }
 
-      // 4) Producto desconocido → el usuario rellena manualmente
+      // No encontrado en ningún sitio
       const shoppingListMode = (route.params as any)?.shoppingListMode;
       Alert.alert(
         "Producto no encontrado",
@@ -228,16 +239,10 @@ export function BarcodeScanScreen() {
           ? "No se encontró este código. Escribe el nombre del producto en la lista."
           : "No se encontró este código en ninguna base de datos. Puedes rellenar los datos manualmente.",
         [
-          {
-            text: "Cancelar",
-            onPress: resetScanState,
-            style: "cancel",
-          },
+          { text: "Cancelar", onPress: resetScanState, style: "cancel" },
           {
             text: shoppingListMode ? "Escribir nombre" : "Añadir manualmente",
-            onPress: () => {
-              goToProducts({ mode: "add", barcodeData: { barcode, name: "", brand: "", category: "" } });
-            },
+            onPress: () => goToProducts({ mode: "add", barcodeData: { barcode, name: "", brand: "", category: "" } }),
           },
         ],
         { cancelable: false }
@@ -384,7 +389,13 @@ export function BarcodeScanScreen() {
 
       {/* Botón cerrar arriba izquierda */}
       <Pressable
-        onPress={() => navigation.goBack()}
+        onPress={() => {
+          if ((navigation as any).canGoBack()) {
+            navigation.goBack();
+          } else {
+            (navigation as any).navigate("PantriesStack");
+          }
+        }}
         style={styles.closeButton}
       >
         <MaterialCommunityIcons name="close" size={28} color={colors.white} />

@@ -35,6 +35,7 @@ import {
   type NutritionalInfo,
 } from "@/api/pantries";
 import { saveProductImage, getProductImage } from "@/services/productImages";
+import { fetchNutritionalFromOFF } from "@/api/products";
 
 type Navigation = NativeStackNavigationProp<PantriesStackParamList>;
 type Route = RouteProp<PantriesStackParamList, "Products">;
@@ -120,21 +121,34 @@ export function ProductsScreen() {
 
   const params = (route.params as any) || {};
   const { pantryId, mode = "add", item, itemId, barcodeData } = params;
+
+  const [liveNutritional, setLiveNutritional] = useState<NutritionalInfo | null>(null);
+
   // Cuando se escanea viene en barcodeData; cuando se edita viene plano en item.product
   const nutritionalInfo: NutritionalInfo | undefined =
     barcodeData?.nutritionalInfo ??
     (item?.product && item.product.calories != null
       ? {
-          calories:  item.product.calories,
-          proteins:  item.product.proteins,
-          carbs:     item.product.carbs,
-          fats:      item.product.fats,
-          fiber:     item.product.fiber,
-          sugars:    item.product.sugars,
-          salt:      item.product.salt,
+          calories:   item.product.calories,
+          proteins:   item.product.proteins,
+          carbs:      item.product.carbs,
+          fats:       item.product.fats,
+          fiber:      item.product.fiber,
+          sugars:     item.product.sugars,
+          salt:       item.product.salt,
           nutriscore: item.product.nutriscore,
         }
-      : undefined);
+      : liveNutritional ?? undefined);
+
+  // En modo edición, si el producto tiene barcode pero no tiene nutricional, lo busca en OFF
+  useEffect(() => {
+    if (mode !== "edit" || !item || item.product.calories != null) return;
+    const barcode = item.product.barcode;
+    if (!barcode) return;
+    fetchNutritionalFromOFF(barcode).then((info) => {
+      if (info) setLiveNutritional(info);
+    });
+  }, []);
 
   const { control, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<FormData>({
     defaultValues: {

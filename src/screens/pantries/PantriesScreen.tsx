@@ -567,10 +567,17 @@ export function PantriesScreen() {
                 status={getExpiryStatus(entry.item.expiry_date)}
                 imageUrl={localImages[entry.item.product.id] || entry.item.product.image_url}
                 addedBy={entry.item.added_by?.name}
-                onPress={() => navigation.navigate("ProductDetail", {
-                  pantryId: pantry!.id,
-                  item: entry.item,
-                })}
+                onPress={() => {
+                  const visibleItems = (listData as FlatEntry[])
+                    .filter((e): e is { _type: "item"; key: string; item: PantryItem } => e._type === "item")
+                    .map((e) => e.item);
+                  const idx = visibleItems.findIndex((i) => i.id === entry.item.id);
+                  navigation.navigate("ProductDetail", {
+                    pantryId: pantry!.id,
+                    items: visibleItems,
+                    initialIndex: Math.max(0, idx),
+                  });
+                }}
               />
             </View>
           );

@@ -69,7 +69,8 @@ export type PantriesStackParamList = {
   };
   ProductDetail: {
     pantryId: string;
-    item: PantryItem;
+    items: PantryItem[];
+    initialIndex: number;
   };
 };
 
