@@ -1,5 +1,17 @@
 import { apiClient } from "./client";
 
+export interface NutritionalInfo {
+  energy_kcal?: number;
+  proteins?: number;
+  carbohydrates?: number;
+  fat?: number;
+  fiber?: number;
+  sugars?: number;
+  salt?: number;
+  nutriscore?: string;
+  serving_size?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -7,6 +19,7 @@ export interface Product {
   category?: string;
   barcode?: string;
   image_url?: string;
+  nutritional_info?: NutritionalInfo;
 }
 
 export interface PantryItem {
@@ -56,6 +69,7 @@ export interface AddItemData {
   product_name?: string;
   product_brand?: string;
   product_category?: string;
+  nutritional_info?: NutritionalInfo;
 }
 
 export interface UpdateItemData {
@@ -67,6 +81,7 @@ export interface UpdateItemData {
   product_name?: string;
   product_brand?: string;
   product_category?: string;
+  nutritional_info?: NutritionalInfo;
 }
 
 export interface Notification {

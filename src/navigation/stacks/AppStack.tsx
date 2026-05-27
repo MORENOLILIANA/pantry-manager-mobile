@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Platform, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing } from "@/config/theme";
-import type { PantryItem } from "@/api/pantries";
+import type { PantryItem, NutritionalInfo } from "@/api/pantries";
 
 // Screens
 import { DashboardScreen } from "@/screens/home/DashboardScreen";
@@ -52,6 +52,8 @@ export type PantriesStackParamList = {
           name: string;
           brand?: string;
           category?: string;
+          nutritionalInfo?: NutritionalInfo;
+          image_url?: string;
         };
       }
     | {

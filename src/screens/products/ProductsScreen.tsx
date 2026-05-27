@@ -32,6 +32,7 @@ import {
   type AddItemData,
   type UpdateItemData,
   type PantryItem,
+  type NutritionalInfo,
 } from "@/api/pantries";
 import { saveProductImage, getProductImage } from "@/services/productImages";
 
@@ -77,6 +78,10 @@ function normalizeCategory(raw?: string): string {
 
 const UNIT_OPTIONS = ["unidades", "kg", "g", "litros", "ml"];
 
+const NUTRISCORE_COLORS: Record<string, string> = {
+  A: "#038141", B: "#85BB2F", C: "#FECB02", D: "#EE8100", E: "#E63E11",
+};
+
 function estimateExpiryFromCategory(category?: string): Date {
   const addDays = (d: number) => new Date(Date.now() + d * 86400000);
   const cat = (category || "").toLowerCase();
@@ -115,6 +120,8 @@ export function ProductsScreen() {
 
   const params = (route.params as any) || {};
   const { pantryId, mode = "add", item, itemId, barcodeData } = params;
+  const nutritionalInfo: NutritionalInfo | undefined =
+    barcodeData?.nutritionalInfo ?? item?.product?.nutritional_info;
 
   const { control, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<FormData>({
     defaultValues: {
@@ -172,6 +179,7 @@ export function ProductsScreen() {
       location: "pantry",
       notes: "",
     });
+    if (barcodeData.image_url) setLocalImageUri(barcodeData.image_url);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [barcodeData?.barcode]);
 
@@ -271,6 +279,7 @@ export function ProductsScreen() {
         })(),
         location: data.location,
         notes: data.notes || undefined,
+        nutritional_info: nutritionalInfo ?? undefined,
       };
 
       if (mode === "add") {
@@ -594,6 +603,56 @@ export function ProductsScreen() {
             />
           </View>
 
+          {/* Información nutricional */}
+          {nutritionalInfo && (
+            <View style={styles.section}>
+              <Text style={styles.fieldLabel}>Información nutricional</Text>
+              <View style={styles.nutriCard}>
+                {nutritionalInfo.nutriscore && (
+                  <View style={styles.nutriScoreRow}>
+                    <Text style={styles.nutriScoreLabel}>Nutri-Score</Text>
+                    {(["A", "B", "C", "D", "E"] as const).map((letter) => {
+                      const active = letter === nutritionalInfo.nutriscore;
+                      return (
+                        <View
+                          key={letter}
+                          style={[
+                            styles.nutriScoreLetter,
+                            active && { backgroundColor: NUTRISCORE_COLORS[letter], transform: [{ scale: 1.2 }] },
+                          ]}
+                        >
+                          <Text style={[styles.nutriScoreLetterText, active && styles.nutriScoreLetterActive]}>
+                            {letter}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+                <Text style={styles.nutriPer100}>Por 100g de producto</Text>
+                <View style={styles.nutriGrid}>
+                  {[
+                    { label: "Calorías",      icon: "fire",              value: nutritionalInfo.energy_kcal != null ? `${nutritionalInfo.energy_kcal} kcal` : null },
+                    { label: "Proteínas",     icon: "arm-flex-outline",  value: nutritionalInfo.proteins != null ? `${nutritionalInfo.proteins.toFixed(1)}g` : null },
+                    { label: "Carbohidratos", icon: "grain",             value: nutritionalInfo.carbohydrates != null ? `${nutritionalInfo.carbohydrates.toFixed(1)}g` : null },
+                    { label: "Grasas",        icon: "water-outline",     value: nutritionalInfo.fat != null ? `${nutritionalInfo.fat.toFixed(1)}g` : null },
+                    { label: "Fibra",         icon: "leaf-outline",      value: nutritionalInfo.fiber != null ? `${nutritionalInfo.fiber.toFixed(1)}g` : null },
+                    { label: "Azúcares",      icon: "cube-outline",      value: nutritionalInfo.sugars != null ? `${nutritionalInfo.sugars.toFixed(1)}g` : null },
+                    { label: "Sal",           icon: "shaker-outline",    value: nutritionalInfo.salt != null ? `${nutritionalInfo.salt.toFixed(2)}g` : null },
+                  ]
+                    .filter((r) => r.value !== null)
+                    .map(({ label, icon, value }) => (
+                      <View key={label} style={styles.nutriRow}>
+                        <MaterialCommunityIcons name={icon as any} size={15} color={colors.primary} />
+                        <Text style={styles.nutriRowLabel}>{label}</Text>
+                        <Text style={styles.nutriRowValue}>{value}</Text>
+                      </View>
+                    ))}
+                </View>
+              </View>
+            </View>
+          )}
+
           <View style={styles.spacer} />
         </ScrollView>
 
@@ -803,6 +862,66 @@ const styles = StyleSheet.create({
   },
   spacer: {
     height: spacing.xl,
+  },
+  // ─── Nutricional ─────────────────────────────────────────────────────────────
+  nutriCard: {
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.primary + "40",
+    padding: spacing.md,
+    backgroundColor: colors.primary + "06",
+  },
+  nutriScoreRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginBottom: spacing.md,
+  },
+  nutriScoreLabel: {
+    ...typography.bodySm,
+    color: colors.subtext,
+    fontWeight: "600",
+    marginRight: spacing.xs,
+  },
+  nutriScoreLetter: {
+    width: 26,
+    height: 26,
+    borderRadius: 4,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.border,
+  },
+  nutriScoreLetterText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.subtext,
+  },
+  nutriScoreLetterActive: {
+    color: colors.white,
+    fontWeight: "700",
+  },
+  nutriPer100: {
+    ...typography.caption,
+    color: colors.subtext,
+    marginBottom: spacing.sm,
+  },
+  nutriGrid: {
+    gap: 6,
+  },
+  nutriRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  nutriRowLabel: {
+    ...typography.bodySm,
+    color: colors.text,
+    flex: 1,
+  },
+  nutriRowValue: {
+    ...typography.bodySm,
+    color: colors.text,
+    fontWeight: "700",
   },
   // ─── Footer ──────────────────────────────────────────────────────────────────
   footer: {

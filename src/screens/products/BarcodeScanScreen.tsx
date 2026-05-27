@@ -19,7 +19,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, borderRadius, typography } from "@/config/theme";
 import type { PantriesStackParamList } from "@/navigation/stacks/AppStack";
 import { apiClient } from "@/api/client";
-import { getPantries } from "@/api/pantries";
+import { getPantries, type NutritionalInfo } from "@/api/pantries";
 
 type Navigation = NativeStackNavigationProp<PantriesStackParamList>;
 type Route = RouteProp<PantriesStackParamList, "BarcodeScan">;
@@ -29,34 +29,48 @@ interface BarcodeData {
   name: string;
   brand?: string;
   category?: string;
+  nutritionalInfo?: NutritionalInfo;
+  image_url?: string;
 }
 
 async function lookupOpenFoodFacts(barcode: string): Promise<BarcodeData | null> {
   try {
     const res = await fetch(
-      `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=product_name,product_name_es,brands,categories,categories_tags`
+      `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=product_name,product_name_es,brands,categories,categories_tags,nutriments,nutrition_grades,serving_size,image_front_url`
     );
     const json = await res.json();
     if (json?.status !== 1 || !json?.product) return null;
 
     const p = json.product;
-    const name: string =
-      p.product_name_es?.trim() ||
-      p.product_name?.trim() ||
-      "";
+    const name: string = p.product_name_es?.trim() || p.product_name?.trim() || "";
     if (!name) return null;
 
-    // Categoría: usar la primera etiqueta legible (quitar prefijo "en:" o "es:")
     const rawCategory: string =
       p.categories?.split(",")[0]?.trim() ||
       p.categories_tags?.[0]?.replace(/^[a-z]{2}:/, "") ||
       "";
+
+    // Extraer datos nutricionales (valores por 100g)
+    const n = p.nutriments || {};
+    const nutritionalInfo: NutritionalInfo = {};
+    if (n["energy-kcal_100g"] != null) nutritionalInfo.energy_kcal = Math.round(n["energy-kcal_100g"]);
+    if (n["proteins_100g"] != null)     nutritionalInfo.proteins = n["proteins_100g"];
+    if (n["carbohydrates_100g"] != null) nutritionalInfo.carbohydrates = n["carbohydrates_100g"];
+    if (n["fat_100g"] != null)           nutritionalInfo.fat = n["fat_100g"];
+    if (n["fiber_100g"] != null)         nutritionalInfo.fiber = n["fiber_100g"];
+    if (n["sugars_100g"] != null)        nutritionalInfo.sugars = n["sugars_100g"];
+    if (n["salt_100g"] != null)          nutritionalInfo.salt = n["salt_100g"];
+    if (p.nutrition_grades)              nutritionalInfo.nutriscore = p.nutrition_grades.toUpperCase();
+    if (p.serving_size)                  nutritionalInfo.serving_size = p.serving_size;
+    const hasNutri = Object.keys(nutritionalInfo).length > 0;
 
     return {
       barcode,
       name,
       brand: p.brands?.split(",")[0]?.trim() || "",
       category: rawCategory,
+      nutritionalInfo: hasNutri ? nutritionalInfo : undefined,
+      image_url: p.image_front_url || undefined,
     };
   } catch {
     return null;
