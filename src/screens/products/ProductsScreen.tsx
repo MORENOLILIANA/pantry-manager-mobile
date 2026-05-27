@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   StyleSheet,
   View,
@@ -36,8 +36,44 @@ import {
 import { saveProductImage, getProductImage } from "@/services/productImages";
 
 type Navigation = NativeStackNavigationProp<PantriesStackParamList>;
-
 type Route = RouteProp<PantriesStackParamList, "Products">;
+
+// ─── Category helpers ─────────────────────────────────────────────────────────
+
+const CATEGORY_CONFIG: Record<string, { label: string; icon: string; color: string }> = {
+  lacteos:      { label: "Lácteos",          icon: "cup",            color: "#3498DB" },
+  carnes:       { label: "Carnes/Pescados",  icon: "food-drumstick", color: "#E74C3C" },
+  frutas:       { label: "Frutas/Verduras",  icon: "food-apple",     color: "#27AE60" },
+  cereales:     { label: "Cereales/Pasta",   icon: "bread-slice",    color: "#F39C12" },
+  bebidas:      { label: "Bebidas",          icon: "bottle-wine",    color: "#8E44AD" },
+  conservas:    { label: "Conservas",        icon: "archive",        color: "#E67E22" },
+  congelados:   { label: "Congelados",       icon: "snowflake",      color: "#5DADE2" },
+  frutos_secos: { label: "Frutos secos",     icon: "food-variant",   color: "#8B6914" },
+  limpieza:     { label: "Limpieza",         icon: "broom",          color: "#1ABC9C" },
+  higiene:      { label: "Higiene",          icon: "shower",         color: "#9B59B6" },
+  otros:        { label: "Otros",            icon: "tag-outline",    color: "#95A5A6" },
+};
+
+const CATEGORY_ORDER = [
+  "lacteos","carnes","frutas","cereales","bebidas",
+  "conservas","congelados","frutos_secos","limpieza","higiene","otros",
+];
+
+function normalizeCategory(raw?: string): string {
+  if (!raw) return "";
+  const s = raw.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  if (/(lact|leche|queso|yogur|nata|mantequilla)/.test(s)) return "lacteos";
+  if (/(carne|pollo|cerdo|ternera|pesc|mariscos|jamon|embutid|salchich|fiambre)/.test(s)) return "carnes";
+  if (/(fruta|verdura|vegetal|legumbre|hortaliza|ensalada|tomate|cebolla|patata|manzana|naranja)/.test(s)) return "frutas";
+  if (/(cereal|pasta|arroz|pan|harina|galleta|avena)/.test(s)) return "cereales";
+  if (/(bebida|zumo|agua|refresc|cafe|te\b|vino|cerveza|batido)/.test(s)) return "bebidas";
+  if (/(conserva|lata|bote|enlatad|atun|sardina)/.test(s)) return "conservas";
+  if (/congelad/.test(s)) return "congelados";
+  if (/(fruto.seco|nuez|almendra|pistacho|anacardo|avellana|cacahuete|pipa)/.test(s)) return "frutos_secos";
+  if (/(limpiez|detergente|jabon|suavizante|limpiad|fregasuelos|lejia|bayeta)/.test(s)) return "limpieza";
+  if (/(higiene|champu|gel de|pasta diente|desodorante|colonia)/.test(s)) return "higiene";
+  return "otros";
+}
 
 const UNIT_OPTIONS = ["unidades", "kg", "g", "litros", "ml"];
 
@@ -84,7 +120,7 @@ export function ProductsScreen() {
     defaultValues: {
       productName: barcodeData?.name || item?.product.name || "",
       productBrand: barcodeData?.brand || item?.product.brand || "",
-      productCategory: barcodeData?.category || item?.product.category || "",
+      productCategory: normalizeCategory(barcodeData?.category || item?.product.category || ""),
       quantity: item ? String(Number.isInteger(item.quantity) ? item.quantity : parseFloat(item.quantity.toFixed(2))) : "1",
       unit: item?.unit || "unidades",
       expiryDate: item?.expiry_date
@@ -106,7 +142,18 @@ export function ProductsScreen() {
 
   const selectedUnit = watch("unit");
   const selectedLocation = watch("location");
+  const selectedCategory = watch("productCategory");
   const expiryDate = watch("expiryDate");
+  const productName = watch("productName");
+  const manualCategoryRef = useRef(false);
+
+  // Auto-detect category from product name unless user manually chose one
+  useEffect(() => {
+    if (manualCategoryRef.current) return;
+    if (!productName.trim()) return;
+    const detected = normalizeCategory(productName);
+    if (detected) setValue("productCategory", detected);
+  }, [productName]);
 
   const toDate = (d: any) => (d instanceof Date ? d : d ? new Date(d) : new Date());
 
@@ -116,7 +163,7 @@ export function ProductsScreen() {
     reset({
       productName: barcodeData.name || "",
       productBrand: barcodeData.brand || "",
-      productCategory: barcodeData.category || "",
+      productCategory: normalizeCategory(barcodeData.category || ""),
       quantity: "1",
       unit: "unidades",
       expiryDate: barcodeData.category
@@ -368,8 +415,8 @@ export function ProductsScreen() {
             </View>
           </View>
 
-          {/* Marca y Categoría */}
-          <View style={styles.twoColumnRow}>
+          {/* Marca */}
+          <View style={styles.section}>
             <Controller
               control={control}
               name="productBrand"
@@ -379,46 +426,77 @@ export function ProductsScreen() {
                   value={value}
                   onChangeText={onChange}
                   placeholder="Ej: Danone"
-                  containerStyle={styles.halfInput}
-                />
-              )}
-            />
-            <Controller
-              control={control}
-              name="productCategory"
-              render={({ field: { value, onChange } }) => (
-                <InputField
-                  label="Categoría"
-                  value={value}
-                  onChangeText={onChange}
-                  placeholder="Ej: Lácteos"
-                  containerStyle={styles.halfInput}
                 />
               )}
             />
           </View>
 
+          {/* Categoría */}
+          <View style={styles.section}>
+            <Text style={styles.fieldLabel}>Categoría</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryChipsRow}>
+              {CATEGORY_ORDER.map((catKey) => {
+                const cfg = CATEGORY_CONFIG[catKey];
+                const active = selectedCategory === catKey;
+                return (
+                  <Pressable
+                    key={catKey}
+                    onPress={() => {
+                      manualCategoryRef.current = true;
+                      setValue("productCategory", catKey);
+                    }}
+                    style={[
+                      styles.categoryChip,
+                      active && { backgroundColor: cfg.color, borderColor: cfg.color },
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name={cfg.icon as any}
+                      size={15}
+                      color={active ? colors.white : cfg.color}
+                    />
+                    <Text style={[styles.categoryChipText, active && styles.categoryChipTextActive]}>
+                      {cfg.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+
           {/* Cantidad y Unidad */}
           <View style={styles.twoColumnRow}>
-            <Controller
-              control={control}
-              name="quantity"
-              rules={{
-                required: "La cantidad es obligatoria.",
-                validate: (v) => parseFloat(v) > 0 || "La cantidad debe ser mayor que 0.",
-              }}
-              render={({ field: { value, onChange } }) => (
-                <InputField
-                  label="Cantidad"
-                  value={value}
-                  onChangeText={onChange}
-                  placeholder="1"
-                  keyboardType="decimal-pad"
-                  error={errors.quantity?.message}
-                  containerStyle={styles.halfInput}
-                />
-              )}
-            />
+            <View style={styles.halfInput}>
+              <Text style={styles.fieldLabel}>Cantidad</Text>
+              <Controller
+                control={control}
+                name="quantity"
+                rules={{
+                  required: "La cantidad es obligatoria.",
+                  validate: (v) => parseFloat(v) > 0 || "La cantidad debe ser mayor que 0.",
+                }}
+                render={({ field: { value, onChange } }) => {
+                  const qty = Math.max(1, Math.round(parseFloat(value) || 1));
+                  return (
+                    <View style={styles.stepperRow}>
+                      <Pressable
+                        onPress={() => onChange(String(Math.max(1, qty - 1)))}
+                        style={styles.stepperBtn}
+                      >
+                        <MaterialCommunityIcons name="minus" size={20} color={colors.text} />
+                      </Pressable>
+                      <Text style={styles.stepperValue}>{qty}</Text>
+                      <Pressable
+                        onPress={() => onChange(String(qty + 1))}
+                        style={styles.stepperBtn}
+                      >
+                        <MaterialCommunityIcons name="plus" size={20} color={colors.text} />
+                      </Pressable>
+                    </View>
+                  );
+                }}
+              />
+            </View>
             <View style={styles.halfInput}>
               <Text style={styles.fieldLabel}>Unidad</Text>
               <View style={styles.unitsGrid}>
@@ -654,6 +732,50 @@ const styles = StyleSheet.create({
   },
   halfInput: {
     flex: 1,
+  },
+  categoryChipsRow: {
+    gap: spacing.sm,
+    paddingRight: spacing.sm,
+  },
+  categoryChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  categoryChipText: {
+    ...typography.bodySm,
+    color: colors.text,
+    fontWeight: "600",
+  },
+  categoryChipTextActive: {
+    color: colors.white,
+  },
+  stepperRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  stepperBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.secondary,
+  },
+  stepperValue: {
+    ...typography.h3,
+    color: colors.text,
+    minWidth: 36,
+    textAlign: "center",
   },
   unitsGrid: {
     flexDirection: "row",

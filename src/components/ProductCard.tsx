@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, Pressable, Image } from "react-native";
+import { StyleSheet, Text, View, Pressable, Image, Alert } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, borderRadius, typography, shadows } from "@/config/theme";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -64,17 +64,21 @@ export function ProductCard({
     }
   };
 
+  const handleMenu = () => {
+    const options: any[] = [];
+    if (onEdit) options.push({ text: "Editar", onPress: onEdit });
+    if (onDelete) options.push({ text: "Eliminar", style: "destructive", onPress: onDelete });
+    options.push({ text: "Cancelar", style: "cancel" });
+    Alert.alert(name, undefined, options);
+  };
+
   return (
     <View style={[styles.card, shadows.sm]}>
       <View style={styles.mainRow}>
         {/* Thumbnail */}
         <View style={styles.imageWrap}>
           {imageUrl ? (
-            <Image
-              source={{ uri: imageUrl }}
-              style={styles.productImage}
-              resizeMode="cover"
-            />
+            <Image source={{ uri: imageUrl }} style={styles.productImage} resizeMode="cover" />
           ) : (
             <View style={styles.imagePlaceholder}>
               <MaterialCommunityIcons
@@ -90,74 +94,36 @@ export function ProductCard({
         <View style={styles.body}>
           <View style={styles.topRow}>
             <View style={styles.titleArea}>
-              <Text style={styles.name} numberOfLines={1}>
-                {name}
-              </Text>
-              {brand ? (
-                <Text style={styles.brand} numberOfLines={1}>
-                  {brand}
-                </Text>
-              ) : null}
+              <Text style={styles.name} numberOfLines={1}>{name}</Text>
+              {brand ? <Text style={styles.brand} numberOfLines={1}>{brand}</Text> : null}
               {status ? <StatusBadge status={status} /> : null}
             </View>
-            <View style={styles.actions}>
-              {onEdit && (
-                <Pressable onPress={onEdit} style={styles.actionButton} hitSlop={6}>
-                  <MaterialCommunityIcons
-                    name="pencil"
-                    size={18}
-                    color={colors.primary}
-                  />
-                </Pressable>
-              )}
-              {onDelete && (
-                <Pressable onPress={onDelete} style={styles.actionButton} hitSlop={6}>
-                  <MaterialCommunityIcons
-                    name="trash-can"
-                    size={18}
-                    color={colors.error}
-                  />
-                </Pressable>
-              )}
-            </View>
+
+            {(onEdit || onDelete) && (
+              <Pressable onPress={handleMenu} style={styles.menuBtn} hitSlop={8}>
+                <MaterialCommunityIcons name="dots-vertical" size={22} color={colors.subtext} />
+              </Pressable>
+            )}
           </View>
 
           <View style={styles.details}>
             <View style={styles.detailRow}>
-              <MaterialCommunityIcons
-                name="package-variant"
-                size={13}
-                color={colors.subtext}
-              />
-              <Text style={styles.detailText}>
-                {quantity} {unit}
-              </Text>
+              <MaterialCommunityIcons name="package-variant" size={13} color={colors.subtext} />
+              <Text style={styles.detailText}>{quantity} {unit}</Text>
             </View>
             <View style={styles.detailRow}>
-              <MaterialCommunityIcons
-                name="calendar"
-                size={13}
-                color={colors.subtext}
-              />
+              <MaterialCommunityIcons name="calendar" size={13} color={colors.subtext} />
               <Text style={styles.detailText}>
                 {expiryDate ? formatDate(expiryDate) : "Sin fecha"}
               </Text>
             </View>
             <View style={styles.detailRow}>
-              <MaterialCommunityIcons
-                name="map-marker"
-                size={13}
-                color={colors.subtext}
-              />
+              <MaterialCommunityIcons name="map-marker" size={13} color={colors.subtext} />
               <Text style={styles.detailText}>{location}</Text>
             </View>
             {addedBy ? (
               <View style={styles.detailRow}>
-                <MaterialCommunityIcons
-                  name="account-outline"
-                  size={13}
-                  color={colors.subtext}
-                />
+                <MaterialCommunityIcons name="account-outline" size={13} color={colors.subtext} />
                 <Text style={styles.detailText}>{addedBy}</Text>
               </View>
             ) : null}
@@ -173,7 +139,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: borderRadius.md,
     padding: spacing.md,
-    marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -212,7 +177,7 @@ const styles = StyleSheet.create({
   },
   titleArea: {
     flex: 1,
-    marginRight: spacing.sm,
+    marginRight: spacing.xs,
     minWidth: 0,
   },
   name: {
@@ -226,11 +191,7 @@ const styles = StyleSheet.create({
     color: colors.subtext,
     marginBottom: spacing.xs,
   },
-  actions: {
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
-  actionButton: {
+  menuBtn: {
     padding: spacing.xs,
   },
   details: {

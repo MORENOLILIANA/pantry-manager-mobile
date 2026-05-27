@@ -4,6 +4,7 @@ import {
   View,
   Text,
   FlatList,
+  ScrollView,
   SafeAreaView,
   ActivityIndicator,
   Pressable,
@@ -23,35 +24,24 @@ import type { PantriesStackParamList } from "@/navigation/stacks/AppStack";
 import { ProductCard } from "@/components/ProductCard";
 import { EmptyState } from "@/components/EmptyState";
 import {
-  getPantries,
-  getPantry,
-  createPantry,
-  deleteItem as deleteItemApi,
-  sharePantry,
-  joinSharedPantry,
-  getPantryMembers,
-  type Pantry,
-  type PantryItem,
-  type PantryMember,
+  getPantries, getPantry, createPantry,
+  deleteItem as deleteItemApi, sharePantry, joinSharedPantry, getPantryMembers,
+  type Pantry, type PantryItem, type PantryMember,
 } from "@/api/pantries";
-import {
-  requestNotificationPermission,
-  scheduleExpiryNotifications,
-} from "@/services/notificationService";
+import { requestNotificationPermission, scheduleExpiryNotifications } from "@/services/notificationService";
 import { loadProductImages } from "@/services/productImages";
 
 type Navigation = NativeStackNavigationProp<PantriesStackParamList>;
-type LocationFilter = "all" | "refrigerator" | "freezer" | "pantry" | "other";
-type ExpiryFilter = "all" | "normal" | "proximo" | "caducado";
-type ViewMode = "expiry" | "category";
+type ViewMode = "all" | "location" | "category" | "expiry";
 
-type FlatListEntry =
-  | { _type: "header"; key: string; catKey: string; count: number }
-  | { _type: "product"; key: string; item: PantryItem };
+type FlatEntry =
+  | { _type: "header"; key: string; label: string; icon: string; color: string; count: number }
+  | { _type: "item";   key: string; item: PantryItem };
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getDaysUntilExpiry(expiryDate: string): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
   const datePart = (expiryDate || "").split("T")[0];
   const parts = datePart.split("-").map(Number);
   if (parts.length < 3 || parts.some(isNaN)) return 0;
@@ -66,39 +56,46 @@ function getExpiryStatus(expiryDate: string): "normal" | "proximo" | "caducado" 
   return "normal";
 }
 
-const LOCATION_OPTIONS: { label: string; value: LocationFilter }[] = [
-  { label: "Todos", value: "all" },
-  { label: "Nevera", value: "refrigerator" },
-  { label: "Congelador", value: "freezer" },
-  { label: "Armario", value: "pantry" },
-  { label: "Otro", value: "other" },
-];
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const LOCATION_DISPLAY: Record<string, string> = {
-  refrigerator: "Nevera",
-  freezer: "Congelador",
-  pantry: "Armario",
-  other: "Otro",
+  refrigerator: "Nevera", freezer: "Congelador", pantry: "Armario", other: "Otro",
 };
 
-const EXPIRY_CARD_CONFIG = {
-  normal:   { label: "Normales",  icon: "check-circle-outline" as const, color: "#27AE60", lightBg: "#EAF7EE" },
-  proximo:  { label: "Próximos",  icon: "clock-alert-outline"  as const, color: "#E67E22", lightBg: "#FEF5E7" },
-  caducado: { label: "Caducados", icon: "alert-circle-outline" as const, color: "#E74C3C", lightBg: "#FDEDEC" },
+const LOCATION_GROUP: Record<string, { label: string; icon: string; color: string }> = {
+  refrigerator: { label: "Nevera",     icon: "fridge-outline",       color: "#3498DB" },
+  freezer:      { label: "Congelador", icon: "snowflake",             color: "#5DADE2" },
+  pantry:       { label: "Armario",    icon: "archive-outline",       color: "#F39C12" },
+  other:        { label: "Otro",       icon: "map-marker-outline",    color: "#95A5A6" },
 };
+const LOCATION_ORDER_GROUP = ["refrigerator", "freezer", "pantry", "other"];
+
+const EXPIRY_GROUP: Record<string, { label: string; icon: string; color: string }> = {
+  caducado: { label: "Caducados",           icon: "alert-circle-outline",  color: "#E74C3C" },
+  proximo:  { label: "Próximos a caducar",  icon: "clock-alert-outline",   color: "#E67E22" },
+  normal:   { label: "En buen estado",      icon: "check-circle-outline",  color: "#27AE60" },
+};
+const EXPIRY_ORDER_GROUP = ["caducado", "proximo", "normal"];
+
+const VIEW_MODES = [
+  { key: "all",      label: "Todos",     icon: "format-list-bulleted" },
+  { key: "expiry",   label: "Caducidad", icon: "clock-outline"        },
+  { key: "category", label: "Categoría", icon: "tag-multiple-outline" },
+  { key: "location", label: "Ubicación", icon: "map-marker-outline"   },
+] as const;
 
 const CATEGORY_CONFIG: Record<string, { label: string; icon: string; color: string }> = {
-  lacteos:      { label: "Lácteos",           icon: "cup",               color: "#3498DB" },
-  carnes:       { label: "Carnes y pescados",  icon: "food-drumstick",    color: "#E74C3C" },
-  frutas:       { label: "Frutas y verduras",  icon: "food-apple",        color: "#27AE60" },
-  cereales:     { label: "Cereales y pasta",   icon: "bread-slice",       color: "#F39C12" },
-  bebidas:      { label: "Bebidas",            icon: "bottle-wine",       color: "#8E44AD" },
-  conservas:    { label: "Conservas",          icon: "archive",           color: "#E67E22" },
-  congelados:   { label: "Congelados",         icon: "snowflake",         color: "#5DADE2" },
-  frutos_secos: { label: "Frutos secos",       icon: "food-variant",      color: "#8B6914" },
-  limpieza:     { label: "Limpieza",           icon: "broom",             color: "#1ABC9C" },
-  higiene:      { label: "Higiene",            icon: "shower",            color: "#9B59B6" },
-  otros:        { label: "Otros",              icon: "tag-outline",       color: "#95A5A6" },
+  lacteos:      { label: "Lácteos",           icon: "cup",            color: "#3498DB" },
+  carnes:       { label: "Carnes y pescados",  icon: "food-drumstick", color: "#E74C3C" },
+  frutas:       { label: "Frutas y verduras",  icon: "food-apple",     color: "#27AE60" },
+  cereales:     { label: "Cereales y pasta",   icon: "bread-slice",    color: "#F39C12" },
+  bebidas:      { label: "Bebidas",            icon: "bottle-wine",    color: "#8E44AD" },
+  conservas:    { label: "Conservas",          icon: "archive",        color: "#E67E22" },
+  congelados:   { label: "Congelados",         icon: "snowflake",      color: "#5DADE2" },
+  frutos_secos: { label: "Frutos secos",       icon: "food-variant",   color: "#8B6914" },
+  limpieza:     { label: "Limpieza",           icon: "broom",          color: "#1ABC9C" },
+  higiene:      { label: "Higiene",            icon: "shower",         color: "#9B59B6" },
+  otros:        { label: "Otros",              icon: "tag-outline",    color: "#95A5A6" },
 };
 
 const CATEGORY_ORDER = [
@@ -122,37 +119,39 @@ function normalizeCategory(raw?: string): string {
   return "otros";
 }
 
+// ─── Screen ───────────────────────────────────────────────────────────────────
+
 export function PantriesScreen() {
   const navigation = useNavigation<Navigation>();
   const route = useRoute<RouteProp<PantriesStackParamList, "Pantries">>();
 
-  const [allPantries, setAllPantries] = useState<Pantry[]>([]);
-  const [pantry, setPantry] = useState<Pantry | null>(null);
-  const [allItems, setAllItems] = useState<PantryItem[]>([]);
-  const [filteredItems, setFilteredItems] = useState<PantryItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [allPantries,  setAllPantries]  = useState<Pantry[]>([]);
+  const [pantry,       setPantry]       = useState<Pantry | null>(null);
+  const [allItems,     setAllItems]     = useState<PantryItem[]>([]);
+  const [filteredItems,setFilteredItems]= useState<PantryItem[]>([]);
+  const [loading,      setLoading]      = useState(true);
   const [switchingPantry, setSwitchingPantry] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [refreshing,   setRefreshing]   = useState(false);
   const selectedPantryIdRef = useRef<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedLocation, setSelectedLocation] = useState<LocationFilter>("all");
-  const [selectedExpiry, setSelectedExpiry] = useState<ExpiryFilter>("all");
-  const [viewMode, setViewMode] = useState<ViewMode>("expiry");
 
-  const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [newPantryName, setNewPantryName] = useState("");
-  const [createLoading, setCreateLoading] = useState(false);
+  const [searchQuery,         setSearchQuery]         = useState("");
+  const [viewMode,            setViewMode]            = useState<ViewMode>("all");
+  const [collapsedSections,   setCollapsedSections]   = useState<Set<string>>(new Set());
 
-  const [expirySummary, setExpirySummary] = useState({ normal: 0, proximo: 0, caducado: 0 });
-  const [localImages, setLocalImages] = useState<Record<string, string>>({});
+  const [localImages,       setLocalImages]       = useState<Record<string, string>>({});
+  const [createModalVisible,setCreateModalVisible]= useState(false);
+  const [newPantryName,     setNewPantryName]     = useState("");
+  const [createLoading,     setCreateLoading]     = useState(false);
   const [shareModalVisible, setShareModalVisible] = useState(false);
-  const [shareToken, setShareToken] = useState<string | null>(null);
-  const [shareLoading, setShareLoading] = useState(false);
-  const [pantryMembers, setPantryMembers] = useState<PantryMember[]>([]);
-  const [joinModalVisible, setJoinModalVisible] = useState(false);
-  const [joinCode, setJoinCode] = useState("");
-  const [joinLoading, setJoinLoading] = useState(false);
-  const [joinError, setJoinError] = useState<string | null>(null);
+  const [shareToken,        setShareToken]        = useState<string | null>(null);
+  const [shareLoading,      setShareLoading]      = useState(false);
+  const [pantryMembers,     setPantryMembers]     = useState<PantryMember[]>([]);
+  const [joinCode,          setJoinCode]          = useState("");
+  const [joinLoading,       setJoinLoading]       = useState(false);
+  const [joinError,         setJoinError]         = useState<string | null>(null);
+  const [joinModalVisible,  setJoinModalVisible]  = useState(false);
+
+  // ── Data loading ──────────────────────────────────────────────────────────
 
   const loadPantries = async (silent = false, preferredPantryId?: string) => {
     try {
@@ -161,27 +160,20 @@ export function PantriesScreen() {
       if (pantries && pantries.length > 0) {
         setAllPantries(pantries);
         const targetId =
-          preferredPantryId && pantries.find((p) => p.id === preferredPantryId)
-            ? preferredPantryId
-            : selectedPantryIdRef.current && pantries.find((p) => p.id === selectedPantryIdRef.current)
-            ? selectedPantryIdRef.current!
-            : pantries[0].id;
+          preferredPantryId && pantries.find((p) => p.id === preferredPantryId) ? preferredPantryId
+          : selectedPantryIdRef.current && pantries.find((p) => p.id === selectedPantryIdRef.current) ? selectedPantryIdRef.current!
+          : pantries[0].id;
         const fullPantry = await getPantry(targetId);
         selectedPantryIdRef.current = fullPantry.id;
         setPantry(fullPantry);
         const items = fullPantry.items || [];
         setAllItems(items);
         scheduleExpiryNotifications(items).catch(() => {});
-        loadProductImages(items.map((i) => i.product.id))
-          .then(setLocalImages)
-          .catch(() => {});
+        loadProductImages(items.map((i) => i.product.id)).then(setLocalImages).catch(() => {});
       } else if (!silent) {
-        setAllPantries([]);
-        setPantry(null);
-        setAllItems([]);
+        setAllPantries([]); setPantry(null); setAllItems([]);
       }
-    } catch (error) {
-      console.error("Error loading pantries:", error);
+    } catch {
       if (!silent) Alert.alert("Error", "No se pudieron cargar las despensas");
     } finally {
       if (!silent) setLoading(false);
@@ -197,13 +189,8 @@ export function PantriesScreen() {
       setPantry(fullPantry);
       setAllItems(fullPantry.items || []);
       setSearchQuery("");
-      setSelectedLocation("all");
-      setSelectedExpiry("all");
-    } catch (error) {
-      Alert.alert("Error", "No se pudo cargar la despensa");
-    } finally {
-      setSwitchingPantry(false);
-    }
+    } catch { Alert.alert("Error", "No se pudo cargar la despensa"); }
+    finally { setSwitchingPantry(false); }
   };
 
   const handleRefresh = async () => {
@@ -212,30 +199,7 @@ export function PantriesScreen() {
     setRefreshing(false);
   };
 
-  useEffect(() => {
-    let base = allItems;
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      base = base.filter((item) => item.product.name.toLowerCase().includes(query));
-    }
-    if (selectedLocation !== "all") {
-      base = base.filter((item) => item.location === selectedLocation);
-    }
-    setExpirySummary(
-      base.reduce(
-        (acc, item) => { acc[getExpiryStatus(item.expiry_date)] += 1; return acc; },
-        { normal: 0, proximo: 0, caducado: 0 }
-      )
-    );
-    let filtered = base;
-    if (selectedExpiry !== "all") {
-      filtered = filtered.filter((item) => getExpiryStatus(item.expiry_date) === selectedExpiry);
-    }
-    filtered = [...filtered].sort(
-      (a, b) => getDaysUntilExpiry(a.expiry_date) - getDaysUntilExpiry(b.expiry_date)
-    );
-    setFilteredItems(filtered);
-  }, [allItems, searchQuery, selectedLocation, selectedExpiry]);
+  // ── List data ─────────────────────────────────────────────────────────────
 
   const initialLoadDone = useRef(false);
 
@@ -246,54 +210,74 @@ export function PantriesScreen() {
     navigation.setParams({ _updatedItem: undefined });
   }, [route.params?._updatedItem]);
 
-  useEffect(() => {
-    requestNotificationPermission().catch(() => {});
-  }, []);
+  useEffect(() => { requestNotificationPermission().catch(() => {}); }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!initialLoadDone.current) {
-        initialLoadDone.current = true;
-        loadPantries();
-      } else {
-        setRefreshing(true);
-        loadPantries(true, selectedPantryIdRef.current ?? undefined)
-          .finally(() => setRefreshing(false));
-      }
-    }, [])
-  );
+  useFocusEffect(useCallback(() => {
+    if (!initialLoadDone.current) { initialLoadDone.current = true; loadPantries(); }
+    else { setRefreshing(true); loadPantries(true, selectedPantryIdRef.current ?? undefined).finally(() => setRefreshing(false)); }
+  }, []));
+
+  const toggleSection = (key: string) => {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  useEffect(() => { setCollapsedSections(new Set()); }, [viewMode]);
+
+  // ── Memos ─────────────────────────────────────────────────────────────────
 
   const closestExpiry = useMemo(() => {
     if (!allItems.length) return null;
-    return [...allItems].sort(
-      (a, b) => getDaysUntilExpiry(a.expiry_date) - getDaysUntilExpiry(b.expiry_date)
-    )[0];
+    return [...allItems].sort((a, b) => getDaysUntilExpiry(a.expiry_date) - getDaysUntilExpiry(b.expiry_date))[0];
   }, [allItems]);
 
-  const categoryListData = useMemo((): FlatListEntry[] => {
-    const groups = new Map<string, PantryItem[]>();
-    for (const item of filteredItems) {
-      const cat = normalizeCategory(item.product.category);
-      if (!groups.has(cat)) groups.set(cat, []);
-      groups.get(cat)!.push(item);
+  const listData = useMemo((): FlatEntry[] => {
+    let base = allItems;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      base = base.filter((i) => i.product.name.toLowerCase().includes(q));
     }
-    const sorted = [...groups.entries()].sort(
-      ([a], [b]) => CATEGORY_ORDER.indexOf(a) - CATEGORY_ORDER.indexOf(b)
-    );
-    const result: FlatListEntry[] = [];
-    for (const [catKey, items] of sorted) {
-      result.push({ _type: "header", key: `h-${catKey}`, catKey, count: items.length });
-      items.forEach((item) =>
-        result.push({ _type: "product", key: `p-${item.id}`, item })
-      );
-    }
-    return result;
-  }, [filteredItems]);
+    const sorted = [...base].sort((a, b) => getDaysUntilExpiry(a.expiry_date) - getDaysUntilExpiry(b.expiry_date));
 
-  const listData = useMemo((): FlatListEntry[] => {
-    if (viewMode === "category") return categoryListData;
-    return filteredItems.map((item) => ({ _type: "product" as const, key: item.id, item }));
-  }, [viewMode, filteredItems, categoryListData]);
+    if (viewMode === "all") {
+      return sorted.map((item) => ({ _type: "item", key: item.id, item }));
+    }
+
+    const group = (
+      keyFn: (i: PantryItem) => string,
+      order: string[],
+      config: Record<string, { label: string; icon: string; color: string }>
+    ): FlatEntry[] => {
+      const groups = new Map<string, PantryItem[]>();
+      for (const item of sorted) {
+        const k = keyFn(item);
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k)!.push(item);
+      }
+      const result: FlatEntry[] = [];
+      for (const key of order) {
+        const items = groups.get(key);
+        if (!items?.length) continue;
+        const cfg = config[key];
+        const headerKey = `h-${key}`;
+        result.push({ _type: "header", key: headerKey, label: cfg.label, icon: cfg.icon, color: cfg.color, count: items.length });
+        if (!collapsedSections.has(headerKey)) {
+          items.forEach((item) => result.push({ _type: "item", key: `i-${item.id}`, item }));
+        }
+      }
+      return result;
+    };
+
+    if (viewMode === "category") return group((i) => normalizeCategory(i.product.category), CATEGORY_ORDER, CATEGORY_CONFIG);
+    if (viewMode === "location") return group((i) => i.location || "other", LOCATION_ORDER_GROUP, LOCATION_GROUP);
+    if (viewMode === "expiry")   return group((i) => getExpiryStatus(i.expiry_date), EXPIRY_ORDER_GROUP, EXPIRY_GROUP);
+    return [];
+  }, [allItems, searchQuery, viewMode, collapsedSections]);
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handleCreatePantry = async () => {
     const name = newPantryName.trim();
@@ -301,43 +285,29 @@ export function PantriesScreen() {
     try {
       setCreateLoading(true);
       const newPantry = await createPantry({ name });
-      setCreateModalVisible(false);
-      setNewPantryName("");
+      setCreateModalVisible(false); setNewPantryName("");
       await loadPantries(false, newPantry.id);
-    } catch (e: any) {
-      Alert.alert("Error", e?.response?.data?.message ?? "No se pudo crear la despensa.");
-    } finally {
-      setCreateLoading(false);
-    }
+    } catch (e: any) { Alert.alert("Error", e?.response?.data?.message ?? "No se pudo crear la despensa."); }
+    finally { setCreateLoading(false); }
   };
 
   const handleOpenShareModal = async () => {
-    setShareToken(null);
-    setJoinCode("");
-    setJoinError(null);
-    setPantryMembers([]);
+    setShareToken(null); setJoinCode(""); setJoinError(null); setPantryMembers([]);
     setShareModalVisible(true);
     if (!pantry) return;
     try {
       setShareLoading(true);
-      const [result, members] = await Promise.all([
-        sharePantry(pantry.id),
-        getPantryMembers(pantry.id),
-      ]);
-      setShareToken(result.token ?? result.share_url ?? null);
-      setPantryMembers(members);
-    } catch (e) {
-      setShareToken(null);
-    } finally {
-      setShareLoading(false);
-    }
+      const [result, members] = await Promise.all([sharePantry(pantry.id), getPantryMembers(pantry.id)]);
+      setShareToken(result.token ?? result.share_url ?? null); setPantryMembers(members);
+    } catch { setShareToken(null); }
+    finally { setShareLoading(false); }
   };
 
   const handleCopyOrShare = async () => {
     if (!shareToken) return;
     const shareUrl = `nutricasa://pantry/shared/${shareToken.replace(/^.*\//, "")}`;
     if (Platform.OS === "web") {
-      try { await navigator.clipboard.writeText(shareUrl); alert("Enlace copiado al portapapeles."); } catch { alert(shareUrl); }
+      try { await navigator.clipboard.writeText(shareUrl); alert("Enlace copiado."); } catch { alert(shareUrl); }
     } else {
       await Share.share({ message: `Únete a mi despensa en NutriCasa: ${shareUrl}`, url: shareUrl });
     }
@@ -346,44 +316,26 @@ export function PantriesScreen() {
   const handleJoin = async () => {
     let code = joinCode.trim();
     if (!code) { setJoinError("Introduce el código o enlace de invitación."); return; }
-    const urlMatch = code.match(/\/pantry\/shared\/([^/?#]+)/);
-    if (urlMatch) code = urlMatch[1];
+    const m = code.match(/\/pantry\/shared\/([^/?#]+)/);
+    if (m) code = m[1];
     try {
-      setJoinLoading(true);
-      setJoinError(null);
+      setJoinLoading(true); setJoinError(null);
       await joinSharedPantry(code);
-      setShareModalVisible(false);
-      setJoinModalVisible(false);
-      setJoinCode("");
+      setShareModalVisible(false); setJoinModalVisible(false); setJoinCode("");
       await loadPantries();
-    } catch (e: any) {
-      setJoinError(e?.response?.data?.message ?? "Código no válido o expirado.");
-    } finally {
-      setJoinLoading(false);
-    }
+    } catch (e: any) { setJoinError(e?.response?.data?.message ?? "Código no válido o expirado."); }
+    finally { setJoinLoading(false); }
   };
 
   const handleDeleteItem = (item: PantryItem) => {
     if (!pantry) return;
-    Alert.alert(
-      "Eliminar producto",
-      `¿Estás seguro de que deseas eliminar ${item.product.name}?`,
-      [
-        { text: "Cancelar", onPress: () => {} },
-        {
-          text: "Eliminar",
-          onPress: async () => {
-            try {
-              await deleteItemApi(pantry.id, item.id);
-              setAllItems(allItems.filter((i) => i.id !== item.id));
-            } catch (error) {
-              Alert.alert("Error", "No se pudo eliminar el producto");
-            }
-          },
-          style: "destructive",
-        },
-      ]
-    );
+    Alert.alert("Eliminar producto", `¿Eliminar ${item.product.name}?`, [
+      { text: "Cancelar" },
+      { text: "Eliminar", style: "destructive", onPress: async () => {
+        try { await deleteItemApi(pantry.id, item.id); setAllItems(allItems.filter((i) => i.id !== item.id)); }
+        catch { Alert.alert("Error", "No se pudo eliminar el producto"); }
+      }},
+    ]);
   };
 
   const handleEditItem = (item: PantryItem) => {
@@ -396,12 +348,12 @@ export function PantriesScreen() {
     navigation.navigate("Products", { pantryId: pantry.id, mode: "add" });
   };
 
+  // ── Loading / empty ───────────────────────────────────────────────────────
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <View style={styles.centerContent}><ActivityIndicator size="large" color={colors.primary} /></View>
       </SafeAreaView>
     );
   }
@@ -416,9 +368,7 @@ export function PantriesScreen() {
         <View style={styles.createContainer}>
           <MaterialCommunityIcons name="fridge-outline" size={72} color={colors.primary} style={{ marginBottom: spacing.xl }} />
           <Text style={styles.createTitle}>Crea tu primera despensa</Text>
-          <Text style={styles.createSubtitle}>
-            Organiza tus productos, controla las caducidades y compártela con quien quieras.
-          </Text>
+          <Text style={styles.createSubtitle}>Organiza tus productos, controla las caducidades y compártela con quien quieras.</Text>
           <Pressable onPress={() => setCreateModalVisible(true)} style={styles.createButton}>
             <MaterialCommunityIcons name="plus" size={20} color={colors.white} />
             <Text style={styles.createButtonText}>Crear despensa</Text>
@@ -434,21 +384,11 @@ export function PantriesScreen() {
             <Pressable style={styles.modalBackdrop} onPress={() => setCreateModalVisible(false)} />
             <View style={styles.modalCard}>
               <Text style={styles.modalTitle}>Nueva despensa</Text>
-              <TextInput
-                style={styles.joinInput}
-                placeholder="Nombre (ej: Casa, Oficina...)"
-                placeholderTextColor={colors.subtext}
-                value={newPantryName}
-                onChangeText={setNewPantryName}
-                autoFocus
-                maxLength={60}
-              />
+              <TextInput style={styles.joinInput} placeholder="Nombre (ej: Casa, Oficina...)" placeholderTextColor={colors.subtext} value={newPantryName} onChangeText={setNewPantryName} autoFocus maxLength={60} />
               <Pressable onPress={handleCreatePantry} disabled={createLoading} style={styles.joinButton}>
                 {createLoading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.joinButtonText}>Crear</Text>}
               </Pressable>
-              <Pressable onPress={() => setCreateModalVisible(false)} style={styles.modalClose}>
-                <Text style={styles.modalCloseText}>Cancelar</Text>
-              </Pressable>
+              <Pressable onPress={() => setCreateModalVisible(false)} style={styles.modalClose}><Text style={styles.modalCloseText}>Cancelar</Text></Pressable>
             </View>
           </KeyboardAvoidingView>
         </Modal>
@@ -458,29 +398,21 @@ export function PantriesScreen() {
             <Pressable style={styles.modalBackdrop} onPress={() => setJoinModalVisible(false)} />
             <View style={styles.modalCard}>
               <Text style={styles.modalTitle}>Unirme a una despensa</Text>
-              <Text style={styles.modalDesc}>Introduce el código de invitación o pega el enlace que te han compartido.</Text>
-              <TextInput
-                style={styles.joinInput}
-                placeholder="Código o enlace de invitación"
-                placeholderTextColor={colors.subtext}
-                value={joinCode}
-                onChangeText={(t) => { setJoinCode(t); setJoinError(null); }}
-                autoCapitalize="none"
-                autoFocus
-              />
+              <Text style={styles.modalDesc}>Introduce el código de invitación o pega el enlace.</Text>
+              <TextInput style={styles.joinInput} placeholder="Código o enlace de invitación" placeholderTextColor={colors.subtext} value={joinCode} onChangeText={(t) => { setJoinCode(t); setJoinError(null); }} autoCapitalize="none" autoFocus />
               {joinError && <Text style={styles.joinError}>{joinError}</Text>}
               <Pressable onPress={handleJoin} disabled={joinLoading} style={styles.joinButton}>
                 {joinLoading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.joinButtonText}>Unirme</Text>}
               </Pressable>
-              <Pressable onPress={() => setJoinModalVisible(false)} style={styles.modalClose}>
-                <Text style={styles.modalCloseText}>Cancelar</Text>
-              </Pressable>
+              <Pressable onPress={() => setJoinModalVisible(false)} style={styles.modalClose}><Text style={styles.modalCloseText}>Cancelar</Text></Pressable>
             </View>
           </KeyboardAvoidingView>
         </Modal>
       </SafeAreaView>
     );
   }
+
+  // ── Main render ───────────────────────────────────────────────────────────
 
   return (
     <SafeAreaView style={styles.container}>
@@ -497,15 +429,58 @@ export function PantriesScreen() {
         </View>
       </View>
 
-      {/* Buscador fijo arriba — fuera del FlatList para que el teclado no tape la lista */}
+      {/* Selector de despensas */}
+      {allPantries.length > 0 && (
+        <View style={styles.pantrySelectorRow}>
+          <FlatList
+            horizontal data={allPantries} keyExtractor={(p) => p.id}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.pantrySelectorContent}
+            renderItem={({ item: p }) => (
+              <Pressable onPress={() => switchPantry(p.id)} style={[styles.pantryChip, p.id === selectedPantryIdRef.current && styles.pantryChipActive, switchingPantry && styles.pantryChipDisabled]}>
+                <MaterialCommunityIcons name="package-variant" size={13} color={p.id === selectedPantryIdRef.current ? colors.white : colors.primary} />
+                <Text style={[styles.pantryChipText, p.id === selectedPantryIdRef.current && styles.pantryChipTextActive]} numberOfLines={1}>{p.name}</Text>
+              </Pressable>
+            )}
+            ListFooterComponent={
+              <Pressable onPress={() => setCreateModalVisible(true)} style={styles.pantryChipNew}>
+                <MaterialCommunityIcons name="plus" size={14} color={colors.primary} />
+                <Text style={styles.pantryChipText}>Nueva</Text>
+              </Pressable>
+            }
+          />
+        </View>
+      )}
+
+      {/* Toggle de vista — misma estructura que el selector de despensas */}
+      <View style={styles.pantrySelectorRow}>
+        <FlatList
+          horizontal
+          data={VIEW_MODES as any[]}
+          keyExtractor={(m: any) => m.key}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.pantrySelectorContent}
+          renderItem={({ item: m }: { item: typeof VIEW_MODES[number] }) => {
+            const active = viewMode === m.key;
+            return (
+              <Pressable
+                onPress={() => setViewMode(m.key as ViewMode)}
+                style={[styles.pantryChip, active && styles.pantryChipActive]}
+              >
+                <MaterialCommunityIcons name={m.icon as any} size={13} color={active ? colors.white : colors.primary} />
+                <Text style={[styles.pantryChipText, active && styles.pantryChipTextActive]}>{m.label}</Text>
+              </Pressable>
+            );
+          }}
+        />
+      </View>
+
+      {/* Buscador */}
       <View style={[styles.searchBox, shadows.sm]}>
         <MaterialCommunityIcons name="magnify" size={20} color={colors.subtext} />
         <TextInput
-          style={styles.searchInput}
-          placeholder="Buscar productos..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholderTextColor={colors.subtext}
+          style={styles.searchInput} placeholder="Buscar productos..."
+          value={searchQuery} onChangeText={setSearchQuery} placeholderTextColor={colors.subtext}
         />
         {searchQuery.length > 0 && (
           <Pressable onPress={() => setSearchQuery("")}>
@@ -522,171 +497,52 @@ export function PantriesScreen() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
-          <View>
-            {/* Selector de despensas */}
-            {allPantries.length > 0 && (
-              <View style={styles.pantrySelectorRow}>
-                <FlatList
-                  horizontal
-                  data={allPantries}
-                  keyExtractor={(p) => p.id}
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.pantrySelectorContent}
-                  renderItem={({ item: p }) => (
-                    <Pressable
-                      onPress={() => switchPantry(p.id)}
-                      style={[
-                        styles.pantryChip,
-                        p.id === selectedPantryIdRef.current && styles.pantryChipActive,
-                        switchingPantry && styles.pantryChipDisabled,
-                      ]}
-                    >
-                      <MaterialCommunityIcons
-                        name="package-variant"
-                        size={13}
-                        color={p.id === selectedPantryIdRef.current ? colors.white : colors.primary}
-                      />
-                      <Text
-                        style={[styles.pantryChipText, p.id === selectedPantryIdRef.current && styles.pantryChipTextActive]}
-                        numberOfLines={1}
-                      >
-                        {p.name}
-                      </Text>
-                    </Pressable>
-                  )}
-                  ListFooterComponent={
-                    <Pressable onPress={() => setCreateModalVisible(true)} style={styles.pantryChipNew}>
-                      <MaterialCommunityIcons name="plus" size={14} color={colors.primary} />
-                      <Text style={styles.pantryChipText}>Nueva</Text>
-                    </Pressable>
-                  }
-                />
+          viewMode === "all" && closestExpiry ? (
+            <View style={styles.closestCard}>
+              <MaterialCommunityIcons
+                name={getExpiryStatus(closestExpiry.expiry_date) === "caducado" ? "alert-circle" : "clock-alert"}
+                size={22}
+                color={getExpiryStatus(closestExpiry.expiry_date) === "caducado" ? colors.error : "#E67E22"}
+              />
+              <View style={styles.closestText}>
+                <Text style={styles.closestTitle}>Más próximo a caducar</Text>
+                <Text style={styles.closestSubtitle}>
+                  {closestExpiry.product.name} · {new Date(closestExpiry.expiry_date).toLocaleDateString("es-ES")}
+                </Text>
               </View>
-            )}
-
-            {/* Filtro de ubicación */}
-            <FlatList
-              horizontal
-              data={LOCATION_OPTIONS}
-              keyExtractor={(item) => item.value}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.locationFilterContent}
-              style={styles.locationFilterRow}
-              renderItem={({ item }) => (
-                <Pressable
-                  onPress={() => setSelectedLocation(item.value)}
-                  style={[styles.filterChip, selectedLocation === item.value && styles.filterChipActive]}
-                >
-                  <Text style={[styles.filterChipText, selectedLocation === item.value && styles.filterChipTextActive]}>
-                    {item.label}
-                  </Text>
-                </Pressable>
-              )}
-            />
-
-            {/* Toggle de vista */}
-            <View style={styles.viewToggleRow}>
-              <Pressable
-                onPress={() => setViewMode("expiry")}
-                style={[styles.viewToggleChip, viewMode === "expiry" && styles.viewToggleChipActive]}
-              >
-                <MaterialCommunityIcons
-                  name="clock-outline"
-                  size={13}
-                  color={viewMode === "expiry" ? colors.white : colors.primary}
-                />
-                <Text style={[styles.viewToggleText, viewMode === "expiry" && styles.viewToggleTextActive]}>
-                  Caducidad
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setViewMode("category")}
-                style={[styles.viewToggleChip, viewMode === "category" && styles.viewToggleChipActive]}
-              >
-                <MaterialCommunityIcons
-                  name="tag-multiple-outline"
-                  size={13}
-                  color={viewMode === "category" ? colors.white : colors.primary}
-                />
-                <Text style={[styles.viewToggleText, viewMode === "category" && styles.viewToggleTextActive]}>
-                  Categoría
-                </Text>
-              </Pressable>
             </View>
-
-            {/* Tarjetas de caducidad — solo en modo caducidad */}
-            {viewMode === "expiry" && (
-              <>
-                <View style={styles.expiryCardsRow}>
-                  {(["normal", "proximo", "caducado"] as const).map((key) => {
-                    const cfg = EXPIRY_CARD_CONFIG[key];
-                    const count = expirySummary[key];
-                    const active = selectedExpiry === key;
-                    return (
-                      <Pressable
-                        key={key}
-                        onPress={() => setSelectedExpiry(active ? "all" : key)}
-                        style={[
-                          styles.expiryCard,
-                          { borderColor: cfg.color, backgroundColor: active ? cfg.color : cfg.lightBg },
-                        ]}
-                      >
-                        <MaterialCommunityIcons name={cfg.icon} size={22} color={active ? "#fff" : cfg.color} />
-                        <Text style={[styles.expiryCardCount, { color: active ? "#fff" : cfg.color }]}>{count}</Text>
-                        <Text style={[styles.expiryCardLabel, { color: active ? "rgba(255,255,255,0.85)" : colors.subtext }]}>
-                          {cfg.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                {closestExpiry && (
-                  <View style={styles.closestCard}>
-                    <MaterialCommunityIcons
-                      name={getExpiryStatus(closestExpiry.expiry_date) === "caducado" ? "alert-circle" : "clock-alert"}
-                      size={22}
-                      color={getExpiryStatus(closestExpiry.expiry_date) === "caducado" ? colors.error : "#E67E22"}
-                    />
-                    <View style={styles.closestText}>
-                      <Text style={styles.closestTitle}>Más próximo a caducar</Text>
-                      <Text style={styles.closestSubtitle}>
-                        {closestExpiry.product.name} · {new Date(closestExpiry.expiry_date).toLocaleDateString("es-ES")}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-              </>
-            )}
-          </View>
+          ) : null
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <EmptyState
-              icon="package-outline"
-              title="Sin productos"
-              subtitle={
-                searchQuery || selectedLocation !== "all" || selectedExpiry !== "all"
-                  ? "No hay productos con estos filtros"
-                  : "Añade el primer producto a tu despensa"
-              }
+              icon="package-outline" title="Sin productos"
+              subtitle={searchQuery ? "No hay productos con esta búsqueda" : "Añade el primer producto a tu despensa"}
               button={{ label: "Añadir producto", onPress: handleAddItem }}
             />
           </View>
         }
-        renderItem={({ item: entry }: { item: FlatListEntry }) => {
+        renderItem={({ item: entry }: { item: FlatEntry }) => {
           if (entry._type === "header") {
-            const cfg = CATEGORY_CONFIG[entry.catKey] ?? CATEGORY_CONFIG.otros;
+            const collapsed = collapsedSections.has(entry.key);
             return (
-              <View style={[styles.categoryHeader, { borderLeftColor: cfg.color }]}>
-                <View style={[styles.categoryHeaderIcon, { backgroundColor: cfg.color + "22" }]}>
-                  <MaterialCommunityIcons name={cfg.icon as any} size={16} color={cfg.color} />
+              <Pressable
+                style={[styles.sectionHeader, { borderLeftColor: entry.color }]}
+                onPress={() => toggleSection(entry.key)}
+              >
+                <View style={[styles.sectionHeaderIcon, { backgroundColor: entry.color + "22" }]}>
+                  <MaterialCommunityIcons name={entry.icon as any} size={15} color={entry.color} />
                 </View>
-                <Text style={[styles.categoryHeaderLabel, { color: cfg.color }]}>{cfg.label}</Text>
-                <View style={[styles.categoryHeaderBadge, { backgroundColor: cfg.color }]}>
-                  <Text style={styles.categoryHeaderCount}>{entry.count}</Text>
+                <Text style={[styles.sectionHeaderLabel, { color: entry.color }]}>{entry.label}</Text>
+                <View style={[styles.sectionHeaderBadge, { backgroundColor: entry.color }]}>
+                  <Text style={styles.sectionHeaderCount}>{entry.count}</Text>
                 </View>
-              </View>
+                <MaterialCommunityIcons
+                  name={collapsed ? "chevron-down" : "chevron-up"}
+                  size={18}
+                  color={entry.color}
+                />
+              </Pressable>
             );
           }
           return (
@@ -710,37 +566,28 @@ export function PantriesScreen() {
         }}
       />
 
-      {/* Modal compartir despensa */}
+      {/* Modal compartir */}
       <Modal visible={shareModalVisible} transparent animationType="fade" onRequestClose={() => setShareModalVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
           <Pressable style={styles.modalBackdrop} onPress={() => setShareModalVisible(false)} />
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Compartir despensa</Text>
-
             <View style={styles.modalSection}>
               <Text style={styles.modalSectionTitle}>Invita a alguien</Text>
-              <Text style={styles.modalDesc}>Comparte este enlace con la persona que quieras añadir a tu despensa.</Text>
-              {shareLoading ? (
-                <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} />
-              ) : shareToken ? (
+              <Text style={styles.modalDesc}>Comparte este enlace para añadir a alguien.</Text>
+              {shareLoading ? <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} />
+              : shareToken ? (
                 <>
                   <View style={styles.tokenBox}>
-                    <Text style={styles.tokenText} numberOfLines={2}>
-                      {`nutricasa://pantry/shared/${shareToken.replace(/^.*\//, "")}`}
-                    </Text>
+                    <Text style={styles.tokenText} numberOfLines={2}>{`nutricasa://pantry/shared/${shareToken.replace(/^.*\//, "")}`}</Text>
                   </View>
                   <Pressable onPress={handleCopyOrShare} style={styles.copyButton}>
                     <MaterialCommunityIcons name="share-variant" size={18} color={colors.white} />
-                    <Text style={styles.copyButtonText}>
-                      {Platform.OS === "web" ? "Copiar enlace" : "Compartir enlace"}
-                    </Text>
+                    <Text style={styles.copyButtonText}>{Platform.OS === "web" ? "Copiar enlace" : "Compartir enlace"}</Text>
                   </Pressable>
                 </>
-              ) : (
-                <Text style={styles.modalDesc}>No se pudo generar el enlace.</Text>
-              )}
+              ) : <Text style={styles.modalDesc}>No se pudo generar el enlace.</Text>}
             </View>
-
             {pantryMembers.length > 0 && (
               <>
                 <View style={styles.divider} />
@@ -749,72 +596,44 @@ export function PantriesScreen() {
                   {pantryMembers.map((m) => (
                     <View key={m.id} style={styles.memberRow}>
                       <View style={styles.memberAvatar}>
-                        <MaterialCommunityIcons
-                          name={m.role === "owner" ? "shield-account" : "account"}
-                          size={16}
-                          color={colors.white}
-                        />
+                        <MaterialCommunityIcons name={m.role === "owner" ? "shield-account" : "account"} size={16} color={colors.white} />
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.memberName}>{m.name}</Text>
                         <Text style={styles.memberEmail}>{m.email}</Text>
                       </View>
-                      <Text style={styles.memberRoleBadge}>
-                        {m.role === "owner" ? "Propietario" : "Invitado"}
-                      </Text>
+                      <Text style={styles.memberRoleBadge}>{m.role === "owner" ? "Propietario" : "Invitado"}</Text>
                     </View>
                   ))}
                 </View>
               </>
             )}
-
             <View style={styles.divider} />
-
             <View style={styles.modalSection}>
               <Text style={styles.modalSectionTitle}>Unirse a una despensa</Text>
-              <Text style={styles.modalDesc}>Introduce el código o pega el enlace de invitación.</Text>
-              <TextInput
-                style={styles.joinInput}
-                placeholder="Código o enlace de invitación"
-                placeholderTextColor={colors.subtext}
-                value={joinCode}
-                onChangeText={(t) => { setJoinCode(t); setJoinError(null); }}
-                autoCapitalize="none"
-              />
+              <Text style={styles.modalDesc}>Introduce el código o pega el enlace.</Text>
+              <TextInput style={styles.joinInput} placeholder="Código o enlace de invitación" placeholderTextColor={colors.subtext} value={joinCode} onChangeText={(t) => { setJoinCode(t); setJoinError(null); }} autoCapitalize="none" />
               {joinError && <Text style={styles.joinError}>{joinError}</Text>}
               <Pressable onPress={handleJoin} disabled={joinLoading} style={styles.joinButton}>
                 {joinLoading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.joinButtonText}>Unirse</Text>}
               </Pressable>
             </View>
-
-            <Pressable onPress={() => setShareModalVisible(false)} style={styles.modalClose}>
-              <Text style={styles.modalCloseText}>Cerrar</Text>
-            </Pressable>
+            <Pressable onPress={() => setShareModalVisible(false)} style={styles.modalClose}><Text style={styles.modalCloseText}>Cerrar</Text></Pressable>
           </View>
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Modal crear nueva despensa */}
+      {/* Modal nueva despensa */}
       <Modal visible={createModalVisible} transparent animationType="fade" onRequestClose={() => setCreateModalVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
           <Pressable style={styles.modalBackdrop} onPress={() => setCreateModalVisible(false)} />
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Nueva despensa</Text>
-            <TextInput
-              style={styles.joinInput}
-              placeholder="Nombre (ej: Casa, Oficina...)"
-              placeholderTextColor={colors.subtext}
-              value={newPantryName}
-              onChangeText={setNewPantryName}
-              autoFocus
-              maxLength={60}
-            />
+            <TextInput style={styles.joinInput} placeholder="Nombre (ej: Casa, Oficina...)" placeholderTextColor={colors.subtext} value={newPantryName} onChangeText={setNewPantryName} autoFocus maxLength={60} />
             <Pressable onPress={handleCreatePantry} disabled={createLoading} style={styles.joinButton}>
               {createLoading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.joinButtonText}>Crear</Text>}
             </Pressable>
-            <Pressable onPress={() => setCreateModalVisible(false)} style={styles.modalClose}>
-              <Text style={styles.modalCloseText}>Cancelar</Text>
-            </Pressable>
+            <Pressable onPress={() => setCreateModalVisible(false)} style={styles.modalClose}><Text style={styles.modalCloseText}>Cancelar</Text></Pressable>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -822,160 +641,105 @@ export function PantriesScreen() {
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
   centerContent: { flex: 1, justifyContent: "center", alignItems: "center" },
   createContainer: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: spacing.xl },
   createTitle: { ...typography.h2, color: colors.text, textAlign: "center", marginBottom: spacing.md },
   createSubtitle: { ...typography.body, color: colors.subtext, textAlign: "center", marginBottom: spacing.xl },
-  createButton: {
-    flexDirection: "row", alignItems: "center", gap: spacing.sm,
-    backgroundColor: colors.primary, paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md, borderRadius: borderRadius.md,
-  },
+  createButton: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.primary, paddingHorizontal: spacing.xl, paddingVertical: spacing.md, borderRadius: borderRadius.md },
   createButtonText: { ...typography.body, color: colors.white, fontWeight: "700" },
-  joinPantryButton: {
-    flexDirection: "row", alignItems: "center", gap: spacing.sm,
-    marginTop: spacing.md, paddingHorizontal: spacing.xl, paddingVertical: spacing.md,
-    borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.white,
-  },
+  joinPantryButton: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.md, paddingHorizontal: spacing.xl, paddingVertical: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.white },
   joinPantryButtonText: { ...typography.body, color: colors.primary, fontWeight: "600" },
-  header: {
-    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-    paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
-    borderBottomWidth: 1, borderBottomColor: "#E5E5E5",
-  },
+
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: "#E5E5E5" },
   headerTitle: { ...typography.h2, color: colors.text },
   headerActions: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  shareButton: {
-    width: 44, height: 44, borderRadius: borderRadius.full,
-    borderWidth: 1, borderColor: colors.primary, justifyContent: "center", alignItems: "center",
-  },
-  addButton: {
-    width: 44, height: 44, borderRadius: borderRadius.full,
-    backgroundColor: colors.primary, justifyContent: "center", alignItems: "center",
-  },
-  searchBox: {
-    flexDirection: "row", alignItems: "center",
-    marginHorizontal: spacing.lg, marginVertical: spacing.md,
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    backgroundColor: colors.white, borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: "#E5E5E5",
-  },
+  shareButton: { width: 44, height: 44, borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.primary, justifyContent: "center", alignItems: "center" },
+  addButton: { width: 44, height: 44, borderRadius: borderRadius.full, backgroundColor: colors.primary, justifyContent: "center", alignItems: "center" },
+
+  searchBox: { flexDirection: "row", alignItems: "center", marginHorizontal: spacing.lg, marginVertical: spacing.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.white, borderRadius: borderRadius.md, borderWidth: 1, borderColor: "#E5E5E5" },
   searchInput: { flex: 1, marginLeft: spacing.sm, ...typography.body, color: colors.text },
-  locationFilterRow: { marginBottom: spacing.sm },
-  locationFilterContent: { paddingHorizontal: spacing.lg, gap: spacing.sm },
-  filterChip: {
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.white,
-  },
-  filterChipActive: { backgroundColor: colors.primary },
-  filterChipText: { ...typography.bodySm, color: colors.primary },
-  filterChipTextActive: { color: colors.white },
+
+  // Toggle de vista
   viewToggleRow: {
-    flexDirection: "row", gap: spacing.sm,
-    paddingHorizontal: spacing.lg, marginBottom: spacing.md, marginTop: spacing.xs,
+    backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   viewToggleChip: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full, borderWidth: 1.5, borderColor: colors.primary, backgroundColor: colors.white,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.white,
   },
-  viewToggleChipActive: { backgroundColor: colors.primary },
-  viewToggleText: { ...typography.bodySm, color: colors.primary, fontWeight: "600" },
-  viewToggleTextActive: { color: colors.white },
-  expiryCardsRow: {
-    flexDirection: "row", gap: spacing.sm,
-    paddingHorizontal: spacing.lg, marginBottom: spacing.md,
+
+  // Section headers (agrupación visual)
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    borderLeftWidth: 4,
+    backgroundColor: colors.white,
+    ...shadows.sm,
   },
-  expiryCard: {
-    flex: 1, alignItems: "center", paddingVertical: spacing.md,
-    borderRadius: borderRadius.md, borderWidth: 1.5, gap: spacing.xs,
-  },
-  expiryCardCount: { ...typography.h2, fontWeight: "700" },
-  expiryCardLabel: { ...typography.bodySm, fontWeight: "600" },
-  closestCard: {
-    marginHorizontal: spacing.lg, marginBottom: spacing.md,
-    flexDirection: "row", alignItems: "center", gap: spacing.md,
-    padding: spacing.md, borderRadius: borderRadius.md, backgroundColor: colors.secondary,
-  },
+  sectionHeaderIcon: { width: 26, height: 26, borderRadius: 13, justifyContent: "center", alignItems: "center" },
+  sectionHeaderLabel: { ...typography.body, fontWeight: "700", flex: 1 },
+  sectionHeaderBadge: { minWidth: 22, height: 22, borderRadius: 11, justifyContent: "center", alignItems: "center", paddingHorizontal: 6 },
+  sectionHeaderCount: { ...typography.caption, color: colors.white, fontWeight: "700" },
+
+  closestCard: { marginHorizontal: spacing.lg, marginTop: spacing.md, marginBottom: spacing.sm, flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, borderRadius: borderRadius.md, backgroundColor: colors.secondary },
   closestText: { flex: 1 },
   closestTitle: { ...typography.body, color: colors.text, fontWeight: "700" },
   closestSubtitle: { ...typography.bodySm, color: colors.subtext, marginTop: spacing.xs },
-  categoryHeader: {
-    flexDirection: "row", alignItems: "center", gap: spacing.sm,
-    marginHorizontal: spacing.lg, marginTop: spacing.lg, marginBottom: spacing.sm,
-    paddingVertical: spacing.sm, paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md, borderLeftWidth: 4,
-    backgroundColor: colors.secondary,
-  },
-  categoryHeaderIcon: {
-    width: 28, height: 28, borderRadius: 14,
-    justifyContent: "center", alignItems: "center",
-  },
-  categoryHeaderLabel: { ...typography.body, fontWeight: "700", flex: 1 },
-  categoryHeaderBadge: {
-    minWidth: 22, height: 22, borderRadius: 11,
-    justifyContent: "center", alignItems: "center", paddingHorizontal: 6,
-  },
-  categoryHeaderCount: { ...typography.caption, color: colors.white, fontWeight: "700" },
+
   emptyContainer: { flex: 1, justifyContent: "center" },
   listContent: { paddingBottom: spacing.xl },
   itemWrapper: { marginBottom: spacing.sm, paddingHorizontal: spacing.lg },
+
   modalOverlay: { flex: 1, justifyContent: "center", alignItems: "center" },
   modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.5)" },
-  modalCard: {
-    backgroundColor: colors.white, borderRadius: borderRadius.lg,
-    padding: spacing.lg, width: "88%", maxWidth: 420,
-  },
+  modalCard: { backgroundColor: colors.white, borderRadius: borderRadius.lg, padding: spacing.lg, width: "88%", maxWidth: 420 },
   modalTitle: { ...typography.h2, color: colors.text, textAlign: "center", marginBottom: spacing.lg },
   modalSection: { marginBottom: spacing.md },
   modalSectionTitle: { ...typography.body, fontWeight: "700", color: colors.text, marginBottom: spacing.xs },
   modalDesc: { ...typography.bodySm, color: colors.subtext, marginBottom: spacing.md },
   tokenBox: { backgroundColor: colors.secondary, borderRadius: borderRadius.md, padding: spacing.md, marginBottom: spacing.md },
   tokenText: { ...typography.bodySm, color: colors.text, fontFamily: "monospace" },
-  copyButton: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: spacing.sm, backgroundColor: colors.primary, borderRadius: borderRadius.md, paddingVertical: spacing.md,
-  },
+  copyButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: colors.primary, borderRadius: borderRadius.md, paddingVertical: spacing.md },
   copyButtonText: { ...typography.body, color: colors.white, fontWeight: "700" },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.lg },
   memberRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: spacing.sm },
-  memberAvatar: {
-    width: 30, height: 30, borderRadius: 15,
-    backgroundColor: colors.primary, alignItems: "center", justifyContent: "center",
-  },
+  memberAvatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   memberName: { ...typography.bodySm, color: colors.text, fontWeight: "600" },
   memberEmail: { ...typography.caption, color: colors.subtext },
   memberRoleBadge: { ...typography.caption, color: colors.primary, fontWeight: "700" },
-  joinInput: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md, paddingVertical: spacing.md,
-    ...typography.body, color: colors.text, marginBottom: spacing.sm,
-  },
+  joinInput: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.md, ...typography.body, color: colors.text, marginBottom: spacing.sm },
   joinError: { ...typography.bodySm, color: colors.error, marginBottom: spacing.sm },
-  joinButton: {
-    backgroundColor: colors.primary, borderRadius: borderRadius.md,
-    paddingVertical: spacing.md, alignItems: "center",
-  },
+  joinButton: { backgroundColor: colors.primary, borderRadius: borderRadius.md, paddingVertical: spacing.md, alignItems: "center" },
   joinButtonText: { ...typography.body, color: colors.white, fontWeight: "700" },
   modalClose: { marginTop: spacing.lg, alignItems: "center" },
   modalCloseText: { ...typography.bodySm, color: colors.subtext, fontWeight: "600" },
+
   pantrySelectorRow: { borderBottomWidth: 1, borderBottomColor: "#E5E5E5" },
   pantrySelectorContent: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, gap: spacing.sm },
-  pantryChip: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.white,
-  },
+  pantryChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.white },
   pantryChipActive: { backgroundColor: colors.primary },
   pantryChipDisabled: { opacity: 0.5 },
-  pantryChipNew: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.primary,
-    borderStyle: "dashed", backgroundColor: colors.white,
-  },
+  pantryChipNew: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.primary, borderStyle: "dashed", backgroundColor: colors.white },
   pantryChipText: { ...typography.bodySm, color: colors.primary, fontWeight: "600" },
   pantryChipTextActive: { color: colors.white },
 });

@@ -23,7 +23,7 @@ import { useAuth } from "@/context/AuthContext";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { colors, spacing, typography, borderRadius, shadows } from "@/config/theme";
 import { fetchCurrentUser, updateProfile, type AuthUser } from "@/api/auth";
-import { getPantries, getPantryMembers, updatePantry, deletePantry, type Pantry, type PantryMember } from "@/api/pantries";
+import { getPantries, getPantryMembers, createPantry, updatePantry, deletePantry, type Pantry, type PantryMember } from "@/api/pantries";
 import {
   getUserAvatar,
   saveUserAvatar,
@@ -71,6 +71,9 @@ export function ProfileScreen() {
   const [editingPantry, setEditingPantry] = useState<Pantry | null>(null);
   const [pantryEditName, setPantryEditName] = useState("");
   const [pantryLoading, setPantryLoading] = useState(false);
+  const [createPantryModalVisible, setCreatePantryModalVisible] = useState(false);
+  const [newPantryName, setNewPantryName] = useState("");
+  const [createPantryLoading, setCreatePantryLoading] = useState(false);
 
   // Cargar datos del usuario y despensas
   const loadUserData = async () => {
@@ -132,6 +135,22 @@ export function ProfileScreen() {
         },
       ]
     );
+  };
+
+  const handleCreatePantry = async () => {
+    const name = newPantryName.trim();
+    if (!name) { crossAlert("Error", "El nombre de la despensa es obligatorio."); return; }
+    try {
+      setCreatePantryLoading(true);
+      const newPantry = await createPantry({ name });
+      setPantries((prev) => [...prev, newPantry]);
+      setCreatePantryModalVisible(false);
+      setNewPantryName("");
+    } catch (e: any) {
+      crossAlert("Error", e?.response?.data?.message ?? "No se pudo crear la despensa.");
+    } finally {
+      setCreatePantryLoading(false);
+    }
   };
 
   const openRenameModal = (pantry: Pantry) => {
@@ -382,10 +401,23 @@ export function ProfileScreen() {
         </View>
 
         {/* Section: Pantries */}
-        {pantries.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Mis despensas</Text>
-            {pantries.map((pantry) => {
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Mis despensas</Text>
+            <Pressable
+              onPress={() => { setNewPantryName(""); setCreatePantryModalVisible(true); }}
+              style={styles.newPantryBtn}
+            >
+              <MaterialCommunityIcons name="plus" size={15} color={colors.primary} />
+              <Text style={styles.newPantryBtnText}>Nueva</Text>
+            </Pressable>
+          </View>
+          {pantries.length === 0 && (
+            <View style={styles.pantriesEmpty}>
+              <Text style={styles.pantriesEmptyText}>Aún no tienes despensas. Crea una para empezar.</Text>
+            </View>
+          )}
+          {pantries.map((pantry) => {
               const isOwner = pantry.user_id == null || pantry.user_id === user?.id;
               return (
                 <View key={pantry.id} style={[styles.pantryItem, shadows.sm]}>
@@ -441,8 +473,7 @@ export function ProfileScreen() {
                 </View>
               );
             })}
-          </View>
-        )}
+        </View>
 
         {/* Spacer */}
         <View style={styles.spacer} />
@@ -549,6 +580,52 @@ export function ProfileScreen() {
                 ) : (
                   <Text style={styles.modalButtonSaveText}>Guardar</Text>
                 )}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Create Pantry Modal */}
+      <Modal
+        visible={createPantryModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCreatePantryModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.modalBackground} onPress={() => setCreatePantryModalVisible(false)} />
+          <View style={[styles.modalContent, shadows.lg]}>
+            <Text style={styles.modalTitle}>Nueva despensa</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Nombre (ej: Casa, Oficina...)"
+              placeholderTextColor={colors.subtext}
+              value={newPantryName}
+              onChangeText={setNewPantryName}
+              editable={!createPantryLoading}
+              autoFocus
+              maxLength={60}
+            />
+            <View style={styles.modalButtons}>
+              <Pressable
+                onPress={() => setCreatePantryModalVisible(false)}
+                disabled={createPantryLoading}
+                style={[styles.modalButton, styles.modalButtonCancel]}
+              >
+                <Text style={styles.modalButtonCancelText}>Cancelar</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleCreatePantry}
+                disabled={createPantryLoading}
+                style={[styles.modalButton, styles.modalButtonSave]}
+              >
+                {createPantryLoading
+                  ? <ActivityIndicator size="small" color={colors.white} />
+                  : <Text style={styles.modalButtonSaveText}>Crear</Text>}
               </Pressable>
             </View>
           </View>
@@ -750,6 +827,37 @@ const styles = StyleSheet.create({
     ...typography.bodySm,
     color: colors.white,
     fontWeight: "600",
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.lg,
+  },
+  newPantryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    backgroundColor: colors.white,
+  },
+  newPantryBtnText: {
+    ...typography.bodySm,
+    color: colors.primary,
+    fontWeight: "700",
+  },
+  pantriesEmpty: {
+    paddingVertical: spacing.lg,
+    alignItems: "center",
+  },
+  pantriesEmptyText: {
+    ...typography.bodySm,
+    color: colors.subtext,
+    textAlign: "center",
   },
   pantryItem: {
     backgroundColor: colors.white,
