@@ -13,8 +13,9 @@ export async function fetchNutritionalFromOFF(barcode: string): Promise<Nutritio
     if (n["energy-kcal_100g"] != null)   info.calories  = Math.round(n["energy-kcal_100g"]);
     if (n["proteins_100g"] != null)       info.proteins  = n["proteins_100g"];
     if (n["carbohydrates_100g"] != null)  info.carbs     = n["carbohydrates_100g"];
-    if (n["fat_100g"] != null)            info.fats      = n["fat_100g"];
-    if (n["fiber_100g"] != null)          info.fiber     = n["fiber_100g"];
+    if (n["fat_100g"] != null)             info.fats          = n["fat_100g"];
+    if (n["saturated-fat_100g"] != null)  info.saturated_fat = n["saturated-fat_100g"];
+    if (n["fiber_100g"] != null)          info.fiber         = n["fiber_100g"];
     if (n["sugars_100g"] != null)         info.sugars    = n["sugars_100g"];
     if (n["salt_100g"] != null)           info.salt      = n["salt_100g"];
     const ns = json.product.nutrition_grades?.toUpperCase();

@@ -36,6 +36,7 @@ import {
 } from "@/api/pantries";
 import { saveProductImage, getProductImage } from "@/services/productImages";
 import { fetchNutritionalFromOFF } from "@/api/products";
+import { calculateNutriscore } from "@/utils/nutriscore";
 
 type Navigation = NativeStackNavigationProp<PantriesStackParamList>;
 type Route = RouteProp<PantriesStackParamList, "Products">;
@@ -127,22 +128,27 @@ export function ProductsScreen() {
   // Cuando se escanea viene en barcodeData; cuando se edita viene plano en item.product
   const nutritionalInfo: NutritionalInfo | undefined =
     barcodeData?.nutritionalInfo ??
-    (item?.product && item.product.calories != null
+    (item?.product && item.product.calories_per_100g != null
       ? {
-          calories:   item.product.calories,
-          proteins:   item.product.proteins,
-          carbs:      item.product.carbs,
-          fats:       item.product.fats,
-          fiber:      item.product.fiber,
-          sugars:     item.product.sugars,
-          salt:       item.product.salt,
-          nutriscore: item.product.nutriscore,
+          calories:      item.product.calories_per_100g,
+          proteins:      item.product.proteins_per_100g,
+          carbs:         item.product.carbohydrates_per_100g,
+          fats:          item.product.fats_per_100g,
+          saturated_fat: item.product.saturated_fat_per_100g,
+          fiber:         item.product.fiber_per_100g,
+          sugars:        item.product.sugar_per_100g,
+          salt:          item.product.salt_per_100g,
+          nutriscore:    item.product.nutriscore,
         }
       : liveNutritional ?? undefined);
 
+  const officialNutriscore  = nutritionalInfo?.nutriscore;
+  const estimatedNutriscore = nutritionalInfo && !officialNutriscore ? calculateNutriscore(nutritionalInfo) : null;
+  const displayNutriscore   = officialNutriscore ?? estimatedNutriscore ?? null;
+
   // En modo edición, si el producto tiene barcode pero no tiene nutricional, lo busca en OFF
   useEffect(() => {
-    if (mode !== "edit" || !item || item.product.calories != null) return;
+    if (mode !== "edit" || !item || item.product.calories_per_100g != null) return;
     const barcode = item.product.barcode;
     if (!barcode) return;
     fetchNutritionalFromOFF(barcode).then((info) => {
@@ -632,15 +638,20 @@ export function ProductsScreen() {
           </View>
 
           {/* Información nutricional */}
-          {nutritionalInfo && (
+          {(nutritionalInfo || displayNutriscore) && (
             <View style={styles.section}>
               <Text style={styles.fieldLabel}>Información nutricional</Text>
               <View style={styles.nutriCard}>
-                {nutritionalInfo.nutriscore && (
+                {displayNutriscore && (
                   <View style={styles.nutriScoreRow}>
-                    <Text style={styles.nutriScoreLabel}>Nutri-Score</Text>
+                    <View style={styles.nutriScoreLabelWrap}>
+                      <Text style={styles.nutriScoreLabel}>Nutri-Score</Text>
+                      {estimatedNutriscore && (
+                        <Text style={styles.nutriScoreEst}>estimado</Text>
+                      )}
+                    </View>
                     {(["A", "B", "C", "D", "E"] as const).map((letter) => {
-                      const active = letter === nutritionalInfo.nutriscore;
+                      const active = letter === displayNutriscore;
                       return (
                         <View
                           key={letter}
@@ -657,26 +668,30 @@ export function ProductsScreen() {
                     })}
                   </View>
                 )}
-                <Text style={styles.nutriPer100}>Por 100g de producto</Text>
-                <View style={styles.nutriGrid}>
-                  {[
-                    { label: "Calorías",      icon: "fire",              value: nutritionalInfo.calories != null ? `${nutritionalInfo.calories} kcal` : null },
-                    { label: "Proteínas",     icon: "arm-flex-outline",  value: nutritionalInfo.proteins != null ? `${nutritionalInfo.proteins.toFixed(1)}g` : null },
-                    { label: "Carbohidratos", icon: "grain",             value: nutritionalInfo.carbs != null ? `${nutritionalInfo.carbs.toFixed(1)}g` : null },
-                    { label: "Grasas",        icon: "water-outline",     value: nutritionalInfo.fats != null ? `${nutritionalInfo.fats.toFixed(1)}g` : null },
-                    { label: "Fibra",         icon: "leaf-outline",      value: nutritionalInfo.fiber != null ? `${nutritionalInfo.fiber.toFixed(1)}g` : null },
-                    { label: "Azúcares",      icon: "cube-outline",      value: nutritionalInfo.sugars != null ? `${nutritionalInfo.sugars.toFixed(1)}g` : null },
-                    { label: "Sal",           icon: "shaker-outline",    value: nutritionalInfo.salt != null ? `${nutritionalInfo.salt.toFixed(2)}g` : null },
-                  ]
-                    .filter((r) => r.value !== null)
-                    .map(({ label, icon, value }) => (
-                      <View key={label} style={styles.nutriRow}>
-                        <MaterialCommunityIcons name={icon as any} size={15} color={colors.primary} />
-                        <Text style={styles.nutriRowLabel}>{label}</Text>
-                        <Text style={styles.nutriRowValue}>{value}</Text>
-                      </View>
-                    ))}
-                </View>
+                {nutritionalInfo && (
+                  <>
+                    <Text style={styles.nutriPer100}>Por 100g de producto</Text>
+                    <View style={styles.nutriGrid}>
+                      {[
+                        { label: "Calorías",      icon: "fire",              value: nutritionalInfo.calories != null ? `${nutritionalInfo.calories} kcal` : null },
+                        { label: "Proteínas",     icon: "arm-flex-outline",  value: nutritionalInfo.proteins != null ? `${nutritionalInfo.proteins.toFixed(1)}g` : null },
+                        { label: "Carbohidratos", icon: "grain",             value: nutritionalInfo.carbs != null ? `${nutritionalInfo.carbs.toFixed(1)}g` : null },
+                        { label: "Grasas",        icon: "water-outline",     value: nutritionalInfo.fats != null ? `${nutritionalInfo.fats.toFixed(1)}g` : null },
+                        { label: "Fibra",         icon: "leaf-outline",      value: nutritionalInfo.fiber != null ? `${nutritionalInfo.fiber.toFixed(1)}g` : null },
+                        { label: "Azúcares",      icon: "cube-outline",      value: nutritionalInfo.sugars != null ? `${nutritionalInfo.sugars.toFixed(1)}g` : null },
+                        { label: "Sal",           icon: "shaker-outline",    value: nutritionalInfo.salt != null ? `${nutritionalInfo.salt.toFixed(2)}g` : null },
+                      ]
+                        .filter((r) => r.value !== null)
+                        .map(({ label, icon, value }) => (
+                          <View key={label} style={styles.nutriRow}>
+                            <MaterialCommunityIcons name={icon as any} size={15} color={colors.primary} />
+                            <Text style={styles.nutriRowLabel}>{label}</Text>
+                            <Text style={styles.nutriRowValue}>{value}</Text>
+                          </View>
+                        ))}
+                    </View>
+                  </>
+                )}
               </View>
             </View>
           )}
@@ -905,12 +920,13 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     marginBottom: spacing.md,
   },
+  nutriScoreLabelWrap: { marginRight: spacing.xs },
   nutriScoreLabel: {
     ...typography.bodySm,
     color: colors.subtext,
     fontWeight: "600",
-    marginRight: spacing.xs,
   },
+  nutriScoreEst: { fontSize: 9, color: colors.subtext, fontStyle: "italic", marginTop: 1 },
   nutriScoreLetter: {
     width: 26,
     height: 26,

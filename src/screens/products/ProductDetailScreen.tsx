@@ -12,6 +12,7 @@ import type { PantriesStackParamList } from "@/navigation/stacks/AppStack";
 import { deleteItem as deleteItemApi, updateItem, type PantryItem, type NutritionalInfo } from "@/api/pantries";
 import { fetchNutritionalFromOFF } from "@/api/products";
 import { getProductImage } from "@/services/productImages";
+import { calculateNutriscore } from "@/utils/nutriscore";
 
 type Navigation = NativeStackNavigationProp<PantriesStackParamList>;
 type Route = RouteProp<PantriesStackParamList, "ProductDetail">;
@@ -94,7 +95,7 @@ function ProductPage({
   // Si el producto tiene código de barras pero sin datos nutricionales,
   // los busca en Open Food Facts y los guarda en el backend
   useEffect(() => {
-    if (item.product.calories != null) return;
+    if (item.product.calories_per_100g != null) return;
     const barcode = item.product.barcode;
     if (!barcode) return;
     fetchNutritionalFromOFF(barcode).then((info) => {
@@ -107,18 +108,23 @@ function ProductPage({
   const expiryInfo = getExpiryInfo(item.expiry_date);
 
   const nutritionalInfo: NutritionalInfo | undefined =
-    item.product.calories != null
+    item.product.calories_per_100g != null
       ? {
-          calories:   item.product.calories,
-          proteins:   item.product.proteins,
-          carbs:      item.product.carbs,
-          fats:       item.product.fats,
-          fiber:      item.product.fiber,
-          sugars:     item.product.sugars,
-          salt:       item.product.salt,
-          nutriscore: item.product.nutriscore,
+          calories:      item.product.calories_per_100g,
+          proteins:      item.product.proteins_per_100g,
+          carbs:         item.product.carbohydrates_per_100g,
+          fats:          item.product.fats_per_100g,
+          saturated_fat: item.product.saturated_fat_per_100g,
+          fiber:         item.product.fiber_per_100g,
+          sugars:        item.product.sugar_per_100g,
+          salt:          item.product.salt_per_100g,
+          nutriscore:    item.product.nutriscore,
         }
       : liveNutritional ?? undefined;
+
+  const officialNutriscore  = nutritionalInfo?.nutriscore;
+  const estimatedNutriscore = nutritionalInfo && !officialNutriscore ? calculateNutriscore(nutritionalInfo) : null;
+  const displayNutriscore   = officialNutriscore ?? estimatedNutriscore ?? null;
 
   return (
     <ScrollView
@@ -186,11 +192,16 @@ function ProductPage({
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Información nutricional</Text>
           <View style={[styles.infoCard, shadows.sm]}>
-            {nutritionalInfo.nutriscore && (
+            {displayNutriscore && (
               <View style={styles.nutriScoreRow}>
-                <Text style={styles.nutriScoreLabel}>Nutri-Score</Text>
+                <View style={styles.nutriScoreLabelWrap}>
+                  <Text style={styles.nutriScoreLabel}>Nutri-Score</Text>
+                  {estimatedNutriscore && (
+                    <Text style={styles.nutriScoreEst}>estimado</Text>
+                  )}
+                </View>
                 {(["A", "B", "C", "D", "E"] as const).map((letter) => {
-                  const active = letter === nutritionalInfo.nutriscore;
+                  const active = letter === displayNutriscore;
                   return (
                     <View
                       key={letter}
@@ -422,7 +433,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm,
     borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  nutriScoreLabel: { ...typography.bodySm, color: colors.subtext, fontWeight: "600", marginRight: spacing.xs, flex: 1 },
+  nutriScoreLabelWrap: { flex: 1, marginRight: spacing.xs },
+  nutriScoreLabel: { ...typography.bodySm, color: colors.subtext, fontWeight: "600" },
+  nutriScoreEst: { fontSize: 9, color: colors.subtext, fontStyle: "italic", marginTop: 1 },
   nutriScoreLetter: {
     width: 28, height: 28, borderRadius: 4,
     justifyContent: "center", alignItems: "center", backgroundColor: colors.border,

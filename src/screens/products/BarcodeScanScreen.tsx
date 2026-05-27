@@ -56,8 +56,9 @@ async function lookupOpenFoodFacts(barcode: string): Promise<BarcodeData | null>
     if (n["energy-kcal_100g"] != null)   nutritionalInfo.calories = Math.round(n["energy-kcal_100g"]);
     if (n["proteins_100g"] != null)       nutritionalInfo.proteins = n["proteins_100g"];
     if (n["carbohydrates_100g"] != null)  nutritionalInfo.carbs = n["carbohydrates_100g"];
-    if (n["fat_100g"] != null)            nutritionalInfo.fats = n["fat_100g"];
-    if (n["fiber_100g"] != null)          nutritionalInfo.fiber = n["fiber_100g"];
+    if (n["fat_100g"] != null)             nutritionalInfo.fats          = n["fat_100g"];
+    if (n["saturated-fat_100g"] != null)  nutritionalInfo.saturated_fat = n["saturated-fat_100g"];
+    if (n["fiber_100g"] != null)          nutritionalInfo.fiber         = n["fiber_100g"];
     if (n["sugars_100g"] != null)         nutritionalInfo.sugars = n["sugars_100g"];
     if (n["salt_100g"] != null)           nutritionalInfo.salt = n["salt_100g"];
     const ns = p.nutrition_grades?.toUpperCase();

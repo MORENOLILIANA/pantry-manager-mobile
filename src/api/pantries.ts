@@ -5,6 +5,7 @@ export interface NutritionalInfo {
   proteins?: number;
   carbs?: number;
   fats?: number;
+  saturated_fat?: number;
   fiber?: number;
   sugars?: number;
   salt?: number;
@@ -18,14 +19,15 @@ export interface Product {
   category?: string;
   barcode?: string;
   image_url?: string;
-  // Columnas nutricionales planas que devuelve el GET
-  calories?: number;
-  proteins?: number;
-  carbs?: number;
-  fats?: number;
-  fiber?: number;
-  sugars?: number;
-  salt?: number;
+  // Columnas nutricionales planas que devuelve el GET (todas con sufijo _per_100g)
+  calories_per_100g?: number;
+  proteins_per_100g?: number;
+  carbohydrates_per_100g?: number;
+  fats_per_100g?: number;
+  saturated_fat_per_100g?: number;
+  fiber_per_100g?: number;
+  sugar_per_100g?: number;
+  salt_per_100g?: number;
   nutriscore?: string;
 }
 
