@@ -36,7 +36,7 @@ type Navigation = NativeStackNavigationProp<any>;
 
 function crossAlert(title: string, message?: string) {
   if (Platform.OS === "web") {
-    window.alert(message ? `${title}\n${message}` : title);
+    (globalThis as any).alert(message ? `${title}\n${message}` : title);
   } else {
     Alert.alert(title, message);
   }
@@ -215,7 +215,7 @@ export function ProfileScreen() {
       } catch (error) {
         console.error("Error logging out:", error);
         if (Platform.OS === "web") {
-          window.alert("No se pudo cerrar sesión");
+          (globalThis as any).alert("No se pudo cerrar sesión");
         } else {
           Alert.alert("Error", "No se pudo cerrar sesión");
         }
@@ -223,7 +223,7 @@ export function ProfileScreen() {
     };
 
     if (Platform.OS === "web") {
-      if (window.confirm("¿Estás seguro de que deseas cerrar sesión?")) {
+      if ((globalThis as any).confirm("¿Estás seguro de que deseas cerrar sesión?")) {
         void doSignOut();
       }
     } else {

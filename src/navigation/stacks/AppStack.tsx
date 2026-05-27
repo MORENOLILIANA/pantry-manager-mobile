@@ -3,6 +3,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import type { NavigatorScreenParams } from "@react-navigation/native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Platform, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing } from "@/config/theme";
 import type { PantryItem } from "@/api/pantries";
 
@@ -41,7 +42,7 @@ export type DashboardStackParamList = {
 };
 
 export type PantriesStackParamList = {
-  Pantries: { _updatedItem?: PantryItem } | undefined;
+  Pantries: { _updatedItem?: PantryItem; viewMode?: "all" | "expiry" | "category" | "location" } | undefined;
   Products:
     | {
         pantryId: string;
@@ -200,6 +201,10 @@ function ProfileStackNavigator() {
 }
 
 export function AppStack() {
+  const insets = useSafeAreaInsets();
+  const bottomPad = Platform.OS === "ios" ? 20 : Math.max(insets.bottom, 8);
+  const tabHeight  = Platform.OS === "ios" ? 88 : 56 + bottomPad;
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -210,9 +215,9 @@ export function AppStack() {
           backgroundColor: colors.white,
           borderTopColor: colors.border,
           borderTopWidth: 1,
-          paddingBottom: Platform.OS === "ios" ? 20 : 8,
+          paddingBottom: bottomPad,
           paddingTop: spacing.sm,
-          height: Platform.OS === "ios" ? 88 : 70,
+          height: tabHeight,
         },
         tabBarLabelStyle: {
           fontSize: 11,

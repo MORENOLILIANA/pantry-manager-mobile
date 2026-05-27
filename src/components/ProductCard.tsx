@@ -1,11 +1,13 @@
 import { StyleSheet, Text, View, Pressable, Image, Alert } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, borderRadius, typography, shadows } from "@/config/theme";
-import { StatusBadge } from "@/components/StatusBadge";
 
 type Status = "normal" | "proximo" | "caducado";
 
 const IMAGE_SIZE = 64;
+
+const DAY_BG: Record<Status, string>    = { caducado: "#FADBD8", proximo: "#FFF3E0", normal: "#D5F4E6" };
+const DAY_COLOR: Record<Status, string> = { caducado: "#E74C3C", proximo: "#F39C12", normal: "#27AE60" };
 
 function getCategoryIcon(category?: string): string {
   if (!category) return "package-variant";
@@ -37,6 +39,19 @@ type Props = {
   onEdit?: () => void;
   onDelete?: () => void;
 };
+
+function getExpiryLabel(expiryDate: string): string {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const datePart = (expiryDate || "").split("T")[0];
+  const parts = datePart.split("-").map(Number);
+  if (parts.length < 3 || parts.some(isNaN)) return "Sin fecha";
+  const expiry = new Date(parts[0], parts[1] - 1, parts[2]);
+  const days = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  if (days < 0) return "Caducado";
+  if (days === 0) return "Caduca hoy";
+  if (days === 1) return "Mañana";
+  return `${days} días`;
+}
 
 export function ProductCard({
   name,
@@ -75,17 +90,26 @@ export function ProductCard({
   return (
     <View style={[styles.card, shadows.sm]}>
       <View style={styles.mainRow}>
-        {/* Thumbnail */}
-        <View style={styles.imageWrap}>
-          {imageUrl ? (
-            <Image source={{ uri: imageUrl }} style={styles.productImage} resizeMode="cover" />
-          ) : (
-            <View style={styles.imagePlaceholder}>
-              <MaterialCommunityIcons
-                name={getCategoryIcon(category) as any}
-                size={28}
-                color={colors.subtext}
-              />
+        {/* Imagen + días restantes */}
+        <View style={styles.leftCol}>
+          <View style={styles.imageWrap}>
+            {imageUrl ? (
+              <Image source={{ uri: imageUrl }} style={styles.productImage} resizeMode="cover" />
+            ) : (
+              <View style={styles.imagePlaceholder}>
+                <MaterialCommunityIcons
+                  name={getCategoryIcon(category) as any}
+                  size={28}
+                  color={colors.subtext}
+                />
+              </View>
+            )}
+          </View>
+          {status && expiryDate && (
+            <View style={[styles.daysTag, { backgroundColor: DAY_BG[status] }]}>
+              <Text style={[styles.daysText, { color: DAY_COLOR[status] }]} numberOfLines={1}>
+                {getExpiryLabel(expiryDate)}
+              </Text>
             </View>
           )}
         </View>
@@ -96,7 +120,6 @@ export function ProductCard({
             <View style={styles.titleArea}>
               <Text style={styles.name} numberOfLines={1}>{name}</Text>
               {brand ? <Text style={styles.brand} numberOfLines={1}>{brand}</Text> : null}
-              {status ? <StatusBadge status={status} /> : null}
             </View>
 
             {(onEdit || onDelete) && (
@@ -146,13 +169,27 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.md,
   },
+  leftCol: {
+    alignItems: "center",
+    gap: spacing.xs,
+    flexShrink: 0,
+  },
   imageWrap: {
     width: IMAGE_SIZE,
     height: IMAGE_SIZE,
     borderRadius: borderRadius.sm,
     overflow: "hidden",
-    flexShrink: 0,
-    alignSelf: "center",
+  },
+  daysTag: {
+    width: IMAGE_SIZE,
+    paddingVertical: 3,
+    borderRadius: borderRadius.sm,
+    alignItems: "center",
+  },
+  daysText: {
+    ...typography.caption,
+    fontWeight: "700",
+    fontSize: 11,
   },
   productImage: {
     width: IMAGE_SIZE,

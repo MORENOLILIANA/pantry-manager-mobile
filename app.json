@@ -5,6 +5,7 @@
     "scheme": "nutricasa",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "platforms": [
       "ios",
       "android",
@@ -20,6 +21,11 @@
     "android": {
       "softwareKeyboardLayoutMode": "pan",
       "package": "com.nutricasa.app",
+      "icon": "./assets/icon.png",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#2D6A4F"
+      },
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",

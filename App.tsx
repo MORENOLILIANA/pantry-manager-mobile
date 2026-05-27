@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { RootNavigator } from "@/navigation/RootNavigator";
 import { useCallback, useEffect, useRef } from "react";
 import { ActivityIndicator, Alert, Linking, SafeAreaView, StyleSheet, View } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { colors } from "@/config/theme";
 import { joinSharedPantry } from "@/api/pantries";
 
@@ -161,12 +162,14 @@ export default function App() {
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
 
   return (
+    <SafeAreaProvider>
     <AuthProvider>
       <NavigationContainer ref={navigationRef} theme={theme} linking={linking}>
         <StatusBar style="dark" />
         <AppContent navigationRef={navigationRef} />
       </NavigationContainer>
     </AuthProvider>
+    </SafeAreaProvider>
   );
 }
 

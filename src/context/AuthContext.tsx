@@ -69,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error("La API no devolvió un token de acceso.");
     }
 
-    await persistSession(nextToken, response.user);
+    await persistSession(nextToken, response.user!);
   }
 
   async function signUp(name: string, email: string, password: string, passwordConfirmation: string): Promise<{ needsLogin: boolean }> {

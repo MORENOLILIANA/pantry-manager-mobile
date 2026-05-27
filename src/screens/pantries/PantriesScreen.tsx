@@ -135,7 +135,7 @@ export function PantriesScreen() {
   const selectedPantryIdRef = useRef<string | null>(null);
 
   const [searchQuery,         setSearchQuery]         = useState("");
-  const [viewMode,            setViewMode]            = useState<ViewMode>("all");
+  const [viewMode,            setViewMode]            = useState<ViewMode>(route.params?.viewMode ?? "all");
   const [collapsedSections,   setCollapsedSections]   = useState<Set<string>>(new Set());
 
   const [localImages,       setLocalImages]       = useState<Record<string, string>>({});
@@ -195,7 +195,7 @@ export function PantriesScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadPantries(false, selectedPantryIdRef.current ?? undefined);
+    await loadPantries(true, selectedPantryIdRef.current ?? undefined);
     setRefreshing(false);
   };
 
@@ -210,11 +210,18 @@ export function PantriesScreen() {
     navigation.setParams({ _updatedItem: undefined });
   }, [route.params?._updatedItem]);
 
+  useEffect(() => {
+    if (route.params?.viewMode) {
+      setViewMode(route.params.viewMode);
+      navigation.setParams({ viewMode: undefined });
+    }
+  }, [route.params?.viewMode]);
+
   useEffect(() => { requestNotificationPermission().catch(() => {}); }, []);
 
   useFocusEffect(useCallback(() => {
     if (!initialLoadDone.current) { initialLoadDone.current = true; loadPantries(); }
-    else { setRefreshing(true); loadPantries(true, selectedPantryIdRef.current ?? undefined).finally(() => setRefreshing(false)); }
+    else { loadPantries(true, selectedPantryIdRef.current ?? undefined); }
   }, []));
 
   const toggleSection = (key: string) => {
@@ -305,11 +312,16 @@ export function PantriesScreen() {
 
   const handleCopyOrShare = async () => {
     if (!shareToken) return;
-    const shareUrl = `nutricasa://pantry/shared/${shareToken.replace(/^.*\//, "")}`;
+    const token = shareToken.replace(/^.*\//, "");
+    const shareUrl = `nutricasa://pantry/shared/${token}`;
+    const message = `Únete a mi despensa en NutriCasa 🏠\n\nAbre la app y usa este código de invitación:\n${token}\n\nO si ya tienes la app instalada, toca el enlace:\n${shareUrl}`;
     if (Platform.OS === "web") {
-      try { await navigator.clipboard.writeText(shareUrl); alert("Enlace copiado."); } catch { alert(shareUrl); }
+      try { await (globalThis as any).navigator.clipboard.writeText(shareUrl); (globalThis as any).alert("Enlace copiado."); } catch { (globalThis as any).alert(shareUrl); }
+    } else if (Platform.OS === "ios") {
+      await Share.share({ message, url: shareUrl });
     } else {
-      await Share.share({ message: `Únete a mi despensa en NutriCasa: ${shareUrl}`, url: shareUrl });
+      // Android: no pasar url por separado para evitar que aparezca duplicado
+      await Share.share({ message });
     }
   };
 
@@ -456,7 +468,7 @@ export function PantriesScreen() {
       <View style={styles.pantrySelectorRow}>
         <FlatList
           horizontal
-          data={VIEW_MODES as any[]}
+          data={VIEW_MODES as unknown as any[]}
           keyExtractor={(m: any) => m.key}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.pantrySelectorContent}
@@ -578,12 +590,18 @@ export function PantriesScreen() {
               {shareLoading ? <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} />
               : shareToken ? (
                 <>
+                  <Text style={[styles.modalDesc, { marginBottom: spacing.xs }]}>Código de invitación:</Text>
                   <View style={styles.tokenBox}>
-                    <Text style={styles.tokenText} numberOfLines={2}>{`nutricasa://pantry/shared/${shareToken.replace(/^.*\//, "")}`}</Text>
+                    <Text style={[styles.tokenText, { fontSize: 18, fontWeight: "700", letterSpacing: 2 }]} numberOfLines={1}>
+                      {shareToken.replace(/^.*\//, "")}
+                    </Text>
                   </View>
+                  <Text style={[styles.modalDesc, { marginTop: spacing.sm, marginBottom: spacing.xs }]}>
+                    La otra persona puede pegarlo en "Unirme con código" dentro de la app.
+                  </Text>
                   <Pressable onPress={handleCopyOrShare} style={styles.copyButton}>
                     <MaterialCommunityIcons name="share-variant" size={18} color={colors.white} />
-                    <Text style={styles.copyButtonText}>{Platform.OS === "web" ? "Copiar enlace" : "Compartir enlace"}</Text>
+                    <Text style={styles.copyButtonText}>{Platform.OS === "web" ? "Copiar enlace" : "Compartir invitación"}</Text>
                   </Pressable>
                 </>
               ) : <Text style={styles.modalDesc}>No se pudo generar el enlace.</Text>}
@@ -660,7 +678,7 @@ const styles = StyleSheet.create({
   shareButton: { width: 44, height: 44, borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.primary, justifyContent: "center", alignItems: "center" },
   addButton: { width: 44, height: 44, borderRadius: borderRadius.full, backgroundColor: colors.primary, justifyContent: "center", alignItems: "center" },
 
-  searchBox: { flexDirection: "row", alignItems: "center", marginHorizontal: spacing.lg, marginVertical: spacing.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.white, borderRadius: borderRadius.md, borderWidth: 1, borderColor: "#E5E5E5" },
+  searchBox: { flexDirection: "row", alignItems: "center", marginHorizontal: spacing.lg, marginTop: spacing.sm, marginBottom: spacing.xs, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.white, borderRadius: borderRadius.md, borderWidth: 1, borderColor: "#E5E5E5" },
   searchInput: { flex: 1, marginLeft: spacing.sm, ...typography.body, color: colors.text },
 
   // Toggle de vista
@@ -701,7 +719,7 @@ const styles = StyleSheet.create({
   sectionHeaderBadge: { minWidth: 22, height: 22, borderRadius: 11, justifyContent: "center", alignItems: "center", paddingHorizontal: 6 },
   sectionHeaderCount: { ...typography.caption, color: colors.white, fontWeight: "700" },
 
-  closestCard: { marginHorizontal: spacing.lg, marginTop: spacing.md, marginBottom: spacing.sm, flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, borderRadius: borderRadius.md, backgroundColor: colors.secondary },
+  closestCard: { marginHorizontal: spacing.lg, marginTop: spacing.xs, marginBottom: spacing.xs, flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, borderRadius: borderRadius.md, backgroundColor: colors.secondary },
   closestText: { flex: 1 },
   closestTitle: { ...typography.body, color: colors.text, fontWeight: "700" },
   closestSubtitle: { ...typography.bodySm, color: colors.subtext, marginTop: spacing.xs },

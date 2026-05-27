@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -87,10 +87,6 @@ export function NotificationsScreen() {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    void loadNotifications();
-  }, []);
 
   useFocusEffect(
     React.useCallback(() => {

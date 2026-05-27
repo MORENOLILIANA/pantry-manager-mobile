@@ -257,7 +257,9 @@ export function DashboardScreen() {
               <Pressable
                 key={item.id}
                 style={[styles.expiryCard, shadows.sm]}
-                onPress={() => navigation.navigate("PantriesStack", { screen: "Pantries" } as any)}
+                onPress={() =>
+                  navigation.navigate("PantriesStack", { screen: "Pantries", params: { viewMode: "expiry" } } as any)
+                }
               >
                 <View style={styles.expiryThumb}>
                   {item.product.image_url ? (

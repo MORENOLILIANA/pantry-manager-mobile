@@ -19,6 +19,7 @@ type Props = {
   numberOfLines?: number;
   containerStyle?: ViewStyle;
   style?: ViewStyle;
+  autoCapitalize?: "none" | "sentences" | "words" | "characters";
 };
 
 export function InputField({
@@ -37,6 +38,7 @@ export function InputField({
   numberOfLines,
   containerStyle,
   style,
+  autoCapitalize,
 }: Props) {
   const hasError = !!error;
   const resolvedContainerStyle = containerStyle || style;
@@ -61,6 +63,7 @@ export function InputField({
           editable={editable}
           multiline={multiline}
           numberOfLines={numberOfLines}
+          autoCapitalize={autoCapitalize}
           style={[styles.input, multiline && styles.inputMultiline]}
         />
         {typeof rightIcon === "string" ? (
