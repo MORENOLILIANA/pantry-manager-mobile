@@ -4,6 +4,8 @@ import type { NavigatorScreenParams } from "@react-navigation/native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Platform, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useEffect } from "react";
+import { requestNotificationPermission } from "@/services/notificationService";
 import { colors, spacing } from "@/config/theme";
 import type { PantryItem, NutritionalInfo } from "@/api/pantries";
 
@@ -216,6 +218,11 @@ function ProfileStackNavigator() {
 export function AppStack() {
   const insets = useSafeAreaInsets();
   const bottomPad = Platform.OS === "ios" ? 20 : Math.max(insets.bottom, 8);
+
+  // Registrar token push en cuanto el usuario entra a la app (no esperar a que visite la despensa)
+  useEffect(() => {
+    requestNotificationPermission().catch(() => {});
+  }, []);
   const tabHeight  = Platform.OS === "ios" ? 88 : 56 + bottomPad;
 
   return (

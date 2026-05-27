@@ -217,7 +217,6 @@ export function PantriesScreen() {
     }
   }, [route.params?.viewMode]);
 
-  useEffect(() => { requestNotificationPermission().catch(() => {}); }, []);
 
   useFocusEffect(useCallback(() => {
     if (!initialLoadDone.current) { initialLoadDone.current = true; loadPantries(); }
