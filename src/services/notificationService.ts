@@ -1,5 +1,7 @@
 import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
+import { apiClient } from "@/api/client";
 import type { PantryItem } from "@/api/pantries";
 
 Notifications.setNotificationHandler({
@@ -13,7 +15,20 @@ Notifications.setNotificationHandler({
 export async function requestNotificationPermission(): Promise<boolean> {
   if (Platform.OS === "web") return false;
   const { status } = await Notifications.requestPermissionsAsync();
-  return status === "granted";
+  if (status !== "granted") return false;
+
+  try {
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+    await apiClient.post("/notifications/register-token", {
+      token: tokenData.data,
+      platform: Platform.OS,
+    });
+  } catch (error) {
+    console.warn("Error registering push token:", error);
+  }
+
+  return true;
 }
 
 function daysUntilExpiry(expiryDate: string): number {
