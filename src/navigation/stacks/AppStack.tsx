@@ -12,6 +12,7 @@ import { DashboardScreen } from "@/screens/home/DashboardScreen";
 import { PantriesScreen } from "@/screens/pantries/PantriesScreen";
 import { ShoppingListsScreen } from "@/screens/shopping-lists/ShoppingListsScreen";
 import { ProductsScreen } from "@/screens/products/ProductsScreen";
+import { ProductDetailScreen } from "@/screens/products/ProductDetailScreen";
 import { BarcodeScanScreen } from "@/screens/products/BarcodeScanScreen";
 import { ProfileScreen } from "@/screens/profile/ProfileScreen";
 import { ChangePasswordScreen } from "@/screens/profile/ChangePasswordScreen";
@@ -65,6 +66,10 @@ export type PantriesStackParamList = {
   BarcodeScan: {
     pantryId?: string;
     shoppingListMode?: boolean;
+  };
+  ProductDetail: {
+    pantryId: string;
+    item: PantryItem;
   };
 };
 
@@ -153,6 +158,11 @@ function PantriesStackNavigator() {
         name="BarcodeScan"
         component={BarcodeScanScreen}
         options={{ title: "Escanear", headerShown: false }}
+      />
+      <PantriesStack.Screen
+        name="ProductDetail"
+        component={ProductDetailScreen}
+        options={{ headerShown: false }}
       />
     </PantriesStack.Navigator>
   );

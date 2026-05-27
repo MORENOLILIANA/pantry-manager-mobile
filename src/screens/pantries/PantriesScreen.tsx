@@ -567,8 +567,10 @@ export function PantriesScreen() {
                 status={getExpiryStatus(entry.item.expiry_date)}
                 imageUrl={localImages[entry.item.product.id] || entry.item.product.image_url}
                 addedBy={entry.item.added_by?.name}
-                onEdit={() => handleEditItem(entry.item)}
-                onDelete={() => handleDeleteItem(entry.item)}
+                onPress={() => navigation.navigate("ProductDetail", {
+                  pantryId: pantry!.id,
+                  item: entry.item,
+                })}
               />
             </View>
           );

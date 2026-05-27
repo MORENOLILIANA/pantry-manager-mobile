@@ -120,8 +120,21 @@ export function ProductsScreen() {
 
   const params = (route.params as any) || {};
   const { pantryId, mode = "add", item, itemId, barcodeData } = params;
+  // Cuando se escanea viene en barcodeData; cuando se edita viene plano en item.product
   const nutritionalInfo: NutritionalInfo | undefined =
-    barcodeData?.nutritionalInfo ?? item?.product?.nutritional_info;
+    barcodeData?.nutritionalInfo ??
+    (item?.product && item.product.calories != null
+      ? {
+          calories:  item.product.calories,
+          proteins:  item.product.proteins,
+          carbs:     item.product.carbs,
+          fats:      item.product.fats,
+          fiber:     item.product.fiber,
+          sugars:    item.product.sugars,
+          salt:      item.product.salt,
+          nutriscore: item.product.nutriscore,
+        }
+      : undefined);
 
   const { control, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<FormData>({
     defaultValues: {
@@ -280,6 +293,7 @@ export function ProductsScreen() {
         location: data.location,
         notes: data.notes || undefined,
         nutritional_info: nutritionalInfo ?? undefined,
+        product_image_url: barcodeData?.image_url || undefined,
       };
 
       if (mode === "add") {
@@ -632,10 +646,10 @@ export function ProductsScreen() {
                 <Text style={styles.nutriPer100}>Por 100g de producto</Text>
                 <View style={styles.nutriGrid}>
                   {[
-                    { label: "Calorías",      icon: "fire",              value: nutritionalInfo.energy_kcal != null ? `${nutritionalInfo.energy_kcal} kcal` : null },
+                    { label: "Calorías",      icon: "fire",              value: nutritionalInfo.calories != null ? `${nutritionalInfo.calories} kcal` : null },
                     { label: "Proteínas",     icon: "arm-flex-outline",  value: nutritionalInfo.proteins != null ? `${nutritionalInfo.proteins.toFixed(1)}g` : null },
-                    { label: "Carbohidratos", icon: "grain",             value: nutritionalInfo.carbohydrates != null ? `${nutritionalInfo.carbohydrates.toFixed(1)}g` : null },
-                    { label: "Grasas",        icon: "water-outline",     value: nutritionalInfo.fat != null ? `${nutritionalInfo.fat.toFixed(1)}g` : null },
+                    { label: "Carbohidratos", icon: "grain",             value: nutritionalInfo.carbs != null ? `${nutritionalInfo.carbs.toFixed(1)}g` : null },
+                    { label: "Grasas",        icon: "water-outline",     value: nutritionalInfo.fats != null ? `${nutritionalInfo.fats.toFixed(1)}g` : null },
                     { label: "Fibra",         icon: "leaf-outline",      value: nutritionalInfo.fiber != null ? `${nutritionalInfo.fiber.toFixed(1)}g` : null },
                     { label: "Azúcares",      icon: "cube-outline",      value: nutritionalInfo.sugars != null ? `${nutritionalInfo.sugars.toFixed(1)}g` : null },
                     { label: "Sal",           icon: "shaker-outline",    value: nutritionalInfo.salt != null ? `${nutritionalInfo.salt.toFixed(2)}g` : null },

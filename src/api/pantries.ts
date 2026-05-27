@@ -1,15 +1,14 @@
 import { apiClient } from "./client";
 
 export interface NutritionalInfo {
-  energy_kcal?: number;
+  calories?: number;
   proteins?: number;
-  carbohydrates?: number;
-  fat?: number;
+  carbs?: number;
+  fats?: number;
   fiber?: number;
   sugars?: number;
   salt?: number;
   nutriscore?: string;
-  serving_size?: string;
 }
 
 export interface Product {
@@ -19,7 +18,15 @@ export interface Product {
   category?: string;
   barcode?: string;
   image_url?: string;
-  nutritional_info?: NutritionalInfo;
+  // Columnas nutricionales planas que devuelve el GET
+  calories?: number;
+  proteins?: number;
+  carbs?: number;
+  fats?: number;
+  fiber?: number;
+  sugars?: number;
+  salt?: number;
+  nutriscore?: string;
 }
 
 export interface PantryItem {
@@ -70,6 +77,7 @@ export interface AddItemData {
   product_brand?: string;
   product_category?: string;
   nutritional_info?: NutritionalInfo;
+  product_image_url?: string;
 }
 
 export interface UpdateItemData {
@@ -82,6 +90,7 @@ export interface UpdateItemData {
   product_brand?: string;
   product_category?: string;
   nutritional_info?: NutritionalInfo;
+  product_image_url?: string;
 }
 
 export interface Notification {

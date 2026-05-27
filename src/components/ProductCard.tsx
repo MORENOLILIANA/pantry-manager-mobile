@@ -36,6 +36,7 @@ type Props = {
   status?: Status;
   imageUrl?: string;
   addedBy?: string;
+  onPress?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
 };
@@ -64,6 +65,7 @@ export function ProductCard({
   status,
   imageUrl,
   addedBy,
+  onPress,
   onEdit,
   onDelete,
 }: Props) {
@@ -88,7 +90,7 @@ export function ProductCard({
   };
 
   return (
-    <View style={[styles.card, shadows.sm]}>
+    <Pressable onPress={onPress} style={[styles.card, shadows.sm]}>
       <View style={styles.mainRow}>
         {/* Imagen con días encima */}
         <View style={styles.imageWrap}>
@@ -155,7 +157,7 @@ export function ProductCard({
           </View>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
