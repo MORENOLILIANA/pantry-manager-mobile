@@ -187,7 +187,7 @@ export function ProductsScreen() {
   const estimatedNutriscore = nutritionalInfo && !officialNutriscore ? calculateNutriscore(nutritionalInfo, selectedCategory) : null;
   const displayNutriscore   = officialNutriscore ?? estimatedNutriscore ?? null;
   const productName = watch("productName");
-  const manualCategoryRef = useRef(false);
+  const manualCategoryRef = useRef(mode === "edit");
 
   // Auto-detect category from product name unless user manually chose one
   useEffect(() => {
