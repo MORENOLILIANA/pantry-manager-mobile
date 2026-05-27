@@ -1,25 +1,6 @@
 import { Platform } from "react-native";
-import type { PantryItem } from "@/api/pantries";
-
-/*
- * Para activar notificaciones push reales, instala el paquete y descomenta el bloque de abajo:
- *   npx expo install expo-notifications
- */
-
-// ─── Stub (sin expo-notifications instalado) ─────────────────────────────────
-
-export async function requestNotificationPermission(): Promise<boolean> {
-  return false;
-}
-
-export async function scheduleExpiryNotifications(_items: PantryItem[]): Promise<void> {
-  // no-op until expo-notifications is installed
-}
-
-/*
-// ─── Implementación real (descomentar tras instalar expo-notifications) ───────
-
 import * as Notifications from "expo-notifications";
+import type { PantryItem } from "@/api/pantries";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -51,9 +32,9 @@ export async function scheduleExpiryNotifications(items: PantryItem[]): Promise<
 
     await Notifications.cancelAllScheduledNotificationsAsync();
 
-    const expiringTomorrow = items.filter((i) => daysUntilExpiry(i.expiry_date) === 1);
-    const expiredToday    = items.filter((i) => daysUntilExpiry(i.expiry_date) === 0);
-    const expiredAlready  = items.filter((i) => daysUntilExpiry(i.expiry_date) < 0);
+    const expiringTomorrow = items.filter((i) => i.expiry_date && daysUntilExpiry(i.expiry_date) === 1);
+    const expiredToday     = items.filter((i) => i.expiry_date && daysUntilExpiry(i.expiry_date) === 0);
+    const expiredAlready   = items.filter((i) => i.expiry_date && daysUntilExpiry(i.expiry_date) < 0);
 
     if (expiringTomorrow.length > 0) {
       const names = expiringTomorrow.map((i) => i.product.name).join(", ");
@@ -100,4 +81,3 @@ export async function scheduleExpiryNotifications(items: PantryItem[]): Promise<
     console.warn("Notification scheduling failed:", error);
   }
 }
-*/
