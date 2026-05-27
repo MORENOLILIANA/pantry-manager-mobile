@@ -92,10 +92,9 @@ function ProductPage({
     }
   }, [item.product.id]);
 
-  // Si el producto tiene código de barras pero sin datos nutricionales,
-  // los busca en Open Food Facts y los guarda en el backend
+  // Si el producto tiene código de barras pero sin datos nutricionales → los busca en OFF
   useEffect(() => {
-    if (item.product.calories_per_100g != null) return;
+    if (item.product.calories != null) return;
     const barcode = item.product.barcode;
     if (!barcode) return;
     fetchNutritionalFromOFF(barcode).then((info) => {
@@ -105,25 +104,43 @@ function ProductPage({
     });
   }, [item.product.id]);
 
+  // Si tiene datos nutricionales pero no tiene nutriscore → pide al backend que lo calcule
+  useEffect(() => {
+    if (item.product.calories == null) return;   // sin datos: el efecto anterior lo gestiona
+    if (item.product.nutriscore != null) return; // ya tiene nutriscore, nada que hacer
+    const info: NutritionalInfo = {
+      calories:      item.product.calories,
+      proteins:      item.product.proteins,
+      carbs:         item.product.carbohydrates,
+      fats:          item.product.fats,
+      saturated_fat: item.product.saturated_fat_per_100g,
+      fiber:         item.product.fiber,
+      sugars:        item.product.sugar,
+      salt:          item.product.salt,
+      // nutriscore ausente → backend lo calcula y lo persiste
+    };
+    updateItem(pantryId, item.id, { nutritional_info: info }).catch(() => {});
+  }, [item.product.id]);
+
   const expiryInfo = getExpiryInfo(item.expiry_date);
 
   const nutritionalInfo: NutritionalInfo | undefined =
-    item.product.calories_per_100g != null
+    item.product.calories != null
       ? {
-          calories:      item.product.calories_per_100g,
-          proteins:      item.product.proteins_per_100g,
-          carbs:         item.product.carbohydrates_per_100g,
-          fats:          item.product.fats_per_100g,
+          calories:      item.product.calories,
+          proteins:      item.product.proteins,
+          carbs:         item.product.carbohydrates,
+          fats:          item.product.fats,
           saturated_fat: item.product.saturated_fat_per_100g,
-          fiber:         item.product.fiber_per_100g,
-          sugars:        item.product.sugar_per_100g,
-          salt:          item.product.salt_per_100g,
-          nutriscore:    item.product.nutriscore,
+          fiber:         item.product.fiber,
+          sugars:        item.product.sugar,
+          salt:          item.product.salt,
+          nutriscore:    item.product.nutriscore ?? undefined,
         }
       : liveNutritional ?? undefined;
 
   const officialNutriscore  = nutritionalInfo?.nutriscore;
-  const estimatedNutriscore = nutritionalInfo && !officialNutriscore ? calculateNutriscore(nutritionalInfo) : null;
+  const estimatedNutriscore = nutritionalInfo && !officialNutriscore ? calculateNutriscore(nutritionalInfo, item.product.category) : null;
   const displayNutriscore   = officialNutriscore ?? estimatedNutriscore ?? null;
 
   return (

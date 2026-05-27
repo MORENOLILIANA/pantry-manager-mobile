@@ -125,30 +125,11 @@ export function ProductsScreen() {
 
   const [liveNutritional, setLiveNutritional] = useState<NutritionalInfo | null>(null);
 
-  // Cuando se escanea viene en barcodeData; cuando se edita viene plano en item.product
-  const nutritionalInfo: NutritionalInfo | undefined =
-    barcodeData?.nutritionalInfo ??
-    (item?.product && item.product.calories_per_100g != null
-      ? {
-          calories:      item.product.calories_per_100g,
-          proteins:      item.product.proteins_per_100g,
-          carbs:         item.product.carbohydrates_per_100g,
-          fats:          item.product.fats_per_100g,
-          saturated_fat: item.product.saturated_fat_per_100g,
-          fiber:         item.product.fiber_per_100g,
-          sugars:        item.product.sugar_per_100g,
-          salt:          item.product.salt_per_100g,
-          nutriscore:    item.product.nutriscore,
-        }
-      : liveNutritional ?? undefined);
-
-  const officialNutriscore  = nutritionalInfo?.nutriscore;
-  const estimatedNutriscore = nutritionalInfo && !officialNutriscore ? calculateNutriscore(nutritionalInfo) : null;
-  const displayNutriscore   = officialNutriscore ?? estimatedNutriscore ?? null;
+  // Nutricional se calcula después de selectedCategory (declarado más abajo con watch)
 
   // En modo edición, si el producto tiene barcode pero no tiene nutricional, lo busca en OFF
   useEffect(() => {
-    if (mode !== "edit" || !item || item.product.calories_per_100g != null) return;
+    if (mode !== "edit" || !item || item.product.calories != null) return;
     const barcode = item.product.barcode;
     if (!barcode) return;
     fetchNutritionalFromOFF(barcode).then((info) => {
@@ -184,6 +165,27 @@ export function ProductsScreen() {
   const selectedLocation = watch("location");
   const selectedCategory = watch("productCategory");
   const expiryDate = watch("expiryDate");
+
+  // Cuando se escanea viene en barcodeData; cuando se edita viene plano en item.product
+  const nutritionalInfo: NutritionalInfo | undefined =
+    barcodeData?.nutritionalInfo ??
+    (item?.product && item.product.calories != null
+      ? {
+          calories:      item.product.calories,
+          proteins:      item.product.proteins,
+          carbs:         item.product.carbohydrates,
+          fats:          item.product.fats,
+          saturated_fat: item.product.saturated_fat_per_100g,
+          fiber:         item.product.fiber,
+          sugars:        item.product.sugar,
+          salt:          item.product.salt,
+          nutriscore:    item.product.nutriscore ?? undefined,
+        }
+      : liveNutritional ?? undefined);
+
+  const officialNutriscore  = nutritionalInfo?.nutriscore;
+  const estimatedNutriscore = nutritionalInfo && !officialNutriscore ? calculateNutriscore(nutritionalInfo, selectedCategory) : null;
+  const displayNutriscore   = officialNutriscore ?? estimatedNutriscore ?? null;
   const productName = watch("productName");
   const manualCategoryRef = useRef(false);
 
