@@ -26,27 +26,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   async function bootstrap() {
-    console.log("🔄 Bootstrap iniciado");
-    
     try {
       const storedToken = await getAuthToken();
-      console.log("📦 Token recuperado:", storedToken ? "SÍ" : "NO");
 
       if (storedToken) {
         setToken(storedToken);
         setApiToken(storedToken);
-        console.log("✅ Token restaurado");
+        try {
+          const currentUser = await fetchCurrentUser();
+          setUser(currentUser);
+        } catch {
+          // Token expirado o inválido — limpiar sesión y mostrar login
+          await clearAuthToken();
+          setApiToken(null);
+          setToken(null);
+        }
       } else {
         setApiToken(null);
-        console.log("❌ Sin token - mostrar login");
       }
     } catch (error) {
-      console.error("⚠️ Error en bootstrap:", error);
+      console.error("Error en bootstrap:", error);
       setApiToken(null);
       setToken(null);
       setUser(null);
     } finally {
-      console.log("✨ Bootstrap completado");
       setIsBootstrapping(false);
     }
   }

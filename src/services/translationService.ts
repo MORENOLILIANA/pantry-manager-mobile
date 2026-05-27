@@ -164,7 +164,6 @@ const EN_TO_ES: Record<string, string> = {
   "chicken breast": "pechuga de pollo",
   "chicken thighs": "muslos de pollo",
   "pork belly": "panceta",
-  walnuts: "nueces",
   hazelnuts: "avellanas",
   pistachios: "pistachos",
   "pine nuts": "piñones",

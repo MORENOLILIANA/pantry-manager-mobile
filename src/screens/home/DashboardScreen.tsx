@@ -304,7 +304,9 @@ export function DashboardScreen() {
           <View style={styles.quickAccessGrid}>
             <Pressable
               onPress={() =>
-                navigation.navigate("PantriesStack", { screen: "Products" } as any)
+                data.pantry
+                  ? navigation.navigate("PantriesStack", { screen: "Products", params: { pantryId: data.pantry.id, mode: "add" } } as any)
+                  : navigation.navigate("PantriesStack", { screen: "Pantries" } as any)
               }
               style={[styles.quickAccessButton, shadows.sm]}
             >

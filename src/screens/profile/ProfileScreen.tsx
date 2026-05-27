@@ -160,7 +160,6 @@ export function ProfileScreen() {
   };
 
   useEffect(() => {
-    loadUserData();
     void (async () => {
       const savedAvatar = await getUserAvatar();
       const savedPhoto = await getUserAvatarPhoto();
@@ -391,6 +390,26 @@ export function ProfileScreen() {
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Elegir avatar</Text>
               <Text style={styles.settingSubtitle}>Personaliza tu perfil</Text>
+            </View>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={24}
+              color={colors.subtext}
+            />
+          </Pressable>
+
+          <Pressable
+            onPress={() => navigation.navigate("Groups")}
+            style={[styles.settingItem, shadows.sm]}
+          >
+            <MaterialCommunityIcons
+              name="account-group"
+              size={24}
+              color={colors.primary}
+            />
+            <View style={styles.settingContent}>
+              <Text style={styles.settingLabel}>Grupos y compartidos</Text>
+              <Text style={styles.settingSubtitle}>Gestiona grupos y listas compartidas</Text>
             </View>
             <MaterialCommunityIcons
               name="chevron-right"
