@@ -14,8 +14,9 @@ import {
   Platform,
   KeyboardAvoidingView,
 } from "react-native";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { RouteProp } from "@react-navigation/native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, borderRadius, typography, shadows } from "@/config/theme";
 import type { PantriesStackParamList } from "@/navigation/stacks/AppStack";
@@ -40,16 +41,17 @@ import {
 import { loadProductImages } from "@/services/productImages";
 
 type Navigation = NativeStackNavigationProp<PantriesStackParamList>;
-
 type LocationFilter = "all" | "refrigerator" | "freezer" | "pantry" | "other";
 type ExpiryFilter = "all" | "normal" | "proximo" | "caducado";
+type ViewMode = "expiry" | "category";
 
-// Fuera del componente para evitar recreación y problemas de cierre
+type FlatListEntry =
+  | { _type: "header"; key: string; catKey: string; count: number }
+  | { _type: "product"; key: string; item: PantryItem };
+
 function getDaysUntilExpiry(expiryDate: string): number {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  // Parseamos solo la parte de fecha (YYYY-MM-DD) como hora local
-  // para evitar el problema de UTC vs local con new Date("YYYY-MM-DD")
   const datePart = (expiryDate || "").split("T")[0];
   const parts = datePart.split("-").map(Number);
   if (parts.length < 3 || parts.some(isNaN)) return 0;
@@ -85,8 +87,44 @@ const EXPIRY_CARD_CONFIG = {
   caducado: { label: "Caducados", icon: "alert-circle-outline" as const, color: "#E74C3C", lightBg: "#FDEDEC" },
 };
 
+const CATEGORY_CONFIG: Record<string, { label: string; icon: string; color: string }> = {
+  lacteos:      { label: "Lácteos",           icon: "cup",               color: "#3498DB" },
+  carnes:       { label: "Carnes y pescados",  icon: "food-drumstick",    color: "#E74C3C" },
+  frutas:       { label: "Frutas y verduras",  icon: "food-apple",        color: "#27AE60" },
+  cereales:     { label: "Cereales y pasta",   icon: "bread-slice",       color: "#F39C12" },
+  bebidas:      { label: "Bebidas",            icon: "bottle-wine",       color: "#8E44AD" },
+  conservas:    { label: "Conservas",          icon: "archive",           color: "#E67E22" },
+  congelados:   { label: "Congelados",         icon: "snowflake",         color: "#5DADE2" },
+  frutos_secos: { label: "Frutos secos",       icon: "food-variant",      color: "#8B6914" },
+  limpieza:     { label: "Limpieza",           icon: "broom",             color: "#1ABC9C" },
+  higiene:      { label: "Higiene",            icon: "shower",            color: "#9B59B6" },
+  otros:        { label: "Otros",              icon: "tag-outline",       color: "#95A5A6" },
+};
+
+const CATEGORY_ORDER = [
+  "lacteos","carnes","frutas","cereales","bebidas",
+  "conservas","congelados","frutos_secos","limpieza","higiene","otros",
+];
+
+function normalizeCategory(raw?: string): string {
+  if (!raw) return "otros";
+  const s = raw.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  if (/(lact|leche|queso|yogur|nata|mantequilla)/.test(s)) return "lacteos";
+  if (/(carne|pollo|cerdo|ternera|pesc|mariscos|jamon|embutid|salchich|fiambre)/.test(s)) return "carnes";
+  if (/(fruta|verdura|vegetal|legumbre|hortaliza|ensalada)/.test(s)) return "frutas";
+  if (/(cereal|pasta|arroz|pan|harina|galleta|avena)/.test(s)) return "cereales";
+  if (/(bebida|zumo|agua|refresc|cafe|te\b|vino|cerveza|batido)/.test(s)) return "bebidas";
+  if (/(conserva|lata|bote|enlatad)/.test(s)) return "conservas";
+  if (/congelad/.test(s)) return "congelados";
+  if (/(fruto.seco|nuez|almendra|pistacho|anacardo|avellana|cacahuete|pipa)/.test(s)) return "frutos_secos";
+  if (/(limpiez|detergente|jabón|jabon|suavizante|limpiad|fregasuelos|lejia|bayeta)/.test(s)) return "limpieza";
+  if (/(higiene|champu|gel de|pasta diente|higienico|desodorante|colonia)/.test(s)) return "higiene";
+  return "otros";
+}
+
 export function PantriesScreen() {
   const navigation = useNavigation<Navigation>();
+  const route = useRoute<RouteProp<PantriesStackParamList, "Pantries">>();
 
   const [allPantries, setAllPantries] = useState<Pantry[]>([]);
   const [pantry, setPantry] = useState<Pantry | null>(null);
@@ -99,6 +137,7 @@ export function PantriesScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLocation, setSelectedLocation] = useState<LocationFilter>("all");
   const [selectedExpiry, setSelectedExpiry] = useState<ExpiryFilter>("all");
+  const [viewMode, setViewMode] = useState<ViewMode>("expiry");
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [newPantryName, setNewPantryName] = useState("");
@@ -119,7 +158,6 @@ export function PantriesScreen() {
     try {
       if (!silent) setLoading(true);
       const pantries = await getPantries();
-
       if (pantries && pantries.length > 0) {
         setAllPantries(pantries);
         const targetId =
@@ -175,32 +213,23 @@ export function PantriesScreen() {
   };
 
   useEffect(() => {
-    // Paso 1: filtrar por búsqueda y ubicación
     let base = allItems;
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      base = base.filter((item) =>
-        item.product.name.toLowerCase().includes(query)
-      );
+      base = base.filter((item) => item.product.name.toLowerCase().includes(query));
     }
     if (selectedLocation !== "all") {
       base = base.filter((item) => item.location === selectedLocation);
     }
-
-    // El resumen refleja exactamente los mismos items que se muestran al hacer clic
     setExpirySummary(
       base.reduce(
         (acc, item) => { acc[getExpiryStatus(item.expiry_date)] += 1; return acc; },
         { normal: 0, proximo: 0, caducado: 0 }
       )
     );
-
-    // Paso 2: filtrar por caducidad y ordenar
     let filtered = base;
     if (selectedExpiry !== "all") {
-      filtered = filtered.filter(
-        (item) => getExpiryStatus(item.expiry_date) === selectedExpiry
-      );
+      filtered = filtered.filter((item) => getExpiryStatus(item.expiry_date) === selectedExpiry);
     }
     filtered = [...filtered].sort(
       (a, b) => getDaysUntilExpiry(a.expiry_date) - getDaysUntilExpiry(b.expiry_date)
@@ -209,6 +238,13 @@ export function PantriesScreen() {
   }, [allItems, searchQuery, selectedLocation, selectedExpiry]);
 
   const initialLoadDone = useRef(false);
+
+  useEffect(() => {
+    const updated = route.params?._updatedItem;
+    if (!updated) return;
+    setAllItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+    navigation.setParams({ _updatedItem: undefined });
+  }, [route.params?._updatedItem]);
 
   useEffect(() => {
     requestNotificationPermission().catch(() => {});
@@ -220,7 +256,9 @@ export function PantriesScreen() {
         initialLoadDone.current = true;
         loadPantries();
       } else {
-        loadPantries(true);
+        setRefreshing(true);
+        loadPantries(true, selectedPantryIdRef.current ?? undefined)
+          .finally(() => setRefreshing(false));
       }
     }, [])
   );
@@ -232,12 +270,34 @@ export function PantriesScreen() {
     )[0];
   }, [allItems]);
 
+  const categoryListData = useMemo((): FlatListEntry[] => {
+    const groups = new Map<string, PantryItem[]>();
+    for (const item of filteredItems) {
+      const cat = normalizeCategory(item.product.category);
+      if (!groups.has(cat)) groups.set(cat, []);
+      groups.get(cat)!.push(item);
+    }
+    const sorted = [...groups.entries()].sort(
+      ([a], [b]) => CATEGORY_ORDER.indexOf(a) - CATEGORY_ORDER.indexOf(b)
+    );
+    const result: FlatListEntry[] = [];
+    for (const [catKey, items] of sorted) {
+      result.push({ _type: "header", key: `h-${catKey}`, catKey, count: items.length });
+      items.forEach((item) =>
+        result.push({ _type: "product", key: `p-${item.id}`, item })
+      );
+    }
+    return result;
+  }, [filteredItems]);
+
+  const listData = useMemo((): FlatListEntry[] => {
+    if (viewMode === "category") return categoryListData;
+    return filteredItems.map((item) => ({ _type: "product" as const, key: item.id, item }));
+  }, [viewMode, filteredItems, categoryListData]);
+
   const handleCreatePantry = async () => {
     const name = newPantryName.trim();
-    if (!name) {
-      Alert.alert("Error", "El nombre de la despensa es obligatorio.");
-      return;
-    }
+    if (!name) { Alert.alert("Error", "El nombre de la despensa es obligatorio."); return; }
     try {
       setCreateLoading(true);
       const newPantry = await createPantry({ name });
@@ -245,8 +305,7 @@ export function PantriesScreen() {
       setNewPantryName("");
       await loadPantries(false, newPantry.id);
     } catch (e: any) {
-      const msg = e?.response?.data?.message ?? "No se pudo crear la despensa.";
-      Alert.alert("Error", msg);
+      Alert.alert("Error", e?.response?.data?.message ?? "No se pudo crear la despensa.");
     } finally {
       setCreateLoading(false);
     }
@@ -276,9 +335,7 @@ export function PantriesScreen() {
 
   const handleCopyOrShare = async () => {
     if (!shareToken) return;
-    const shareUrl = shareToken.startsWith("http")
-      ? shareToken
-      : `https://nutricasa.duckdns.org/pantry/shared/${shareToken}`;
+    const shareUrl = `nutricasa://pantry/shared/${shareToken.replace(/^.*\//, "")}`;
     if (Platform.OS === "web") {
       try { await navigator.clipboard.writeText(shareUrl); alert("Enlace copiado al portapapeles."); } catch { alert(shareUrl); }
     } else {
@@ -289,11 +346,8 @@ export function PantriesScreen() {
   const handleJoin = async () => {
     let code = joinCode.trim();
     if (!code) { setJoinError("Introduce el código o enlace de invitación."); return; }
-
-    // Si pegan un enlace completo, extraer solo el token
     const urlMatch = code.match(/\/pantry\/shared\/([^/?#]+)/);
     if (urlMatch) code = urlMatch[1];
-
     try {
       setJoinLoading(true);
       setJoinError(null);
@@ -311,7 +365,6 @@ export function PantriesScreen() {
 
   const handleDeleteItem = (item: PantryItem) => {
     if (!pantry) return;
-
     Alert.alert(
       "Eliminar producto",
       `¿Estás seguro de que deseas eliminar ${item.product.name}?`,
@@ -324,7 +377,6 @@ export function PantriesScreen() {
               await deleteItemApi(pantry.id, item.id);
               setAllItems(allItems.filter((i) => i.id !== item.id));
             } catch (error) {
-              console.error("Error deleting item:", error);
               Alert.alert("Error", "No se pudo eliminar el producto");
             }
           },
@@ -336,20 +388,12 @@ export function PantriesScreen() {
 
   const handleEditItem = (item: PantryItem) => {
     if (!pantry) return;
-    navigation.navigate("Products", {
-      pantryId: pantry.id,
-      itemId: item.id,
-      mode: "edit",
-      item,
-    });
+    navigation.navigate("Products", { pantryId: pantry.id, itemId: item.id, mode: "edit", item });
   };
 
   const handleAddItem = () => {
     if (!pantry) return;
-    navigation.navigate("Products", {
-      pantryId: pantry.id,
-      mode: "add",
-    });
+    navigation.navigate("Products", { pantryId: pantry.id, mode: "add" });
   };
 
   if (loading) {
@@ -385,7 +429,6 @@ export function PantriesScreen() {
           </Pressable>
         </View>
 
-        {/* Modal crear despensa */}
         <Modal visible={createModalVisible} transparent animationType="fade" onRequestClose={() => setCreateModalVisible(false)}>
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
             <Pressable style={styles.modalBackdrop} onPress={() => setCreateModalVisible(false)} />
@@ -401,9 +444,7 @@ export function PantriesScreen() {
                 maxLength={60}
               />
               <Pressable onPress={handleCreatePantry} disabled={createLoading} style={styles.joinButton}>
-                {createLoading
-                  ? <ActivityIndicator color={colors.white} />
-                  : <Text style={styles.joinButtonText}>Crear</Text>}
+                {createLoading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.joinButtonText}>Crear</Text>}
               </Pressable>
               <Pressable onPress={() => setCreateModalVisible(false)} style={styles.modalClose}>
                 <Text style={styles.modalCloseText}>Cancelar</Text>
@@ -412,7 +453,6 @@ export function PantriesScreen() {
           </KeyboardAvoidingView>
         </Modal>
 
-        {/* Modal unirse con código o enlace */}
         <Modal visible={joinModalVisible} transparent animationType="fade" onRequestClose={() => setJoinModalVisible(false)}>
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
             <Pressable style={styles.modalBackdrop} onPress={() => setJoinModalVisible(false)} />
@@ -430,9 +470,7 @@ export function PantriesScreen() {
               />
               {joinError && <Text style={styles.joinError}>{joinError}</Text>}
               <Pressable onPress={handleJoin} disabled={joinLoading} style={styles.joinButton}>
-                {joinLoading
-                  ? <ActivityIndicator color={colors.white} />
-                  : <Text style={styles.joinButtonText}>Unirme</Text>}
+                {joinLoading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.joinButtonText}>Unirme</Text>}
               </Pressable>
               <Pressable onPress={() => setJoinModalVisible(false)} style={styles.modalClose}>
                 <Text style={styles.modalCloseText}>Cancelar</Text>
@@ -459,9 +497,26 @@ export function PantriesScreen() {
         </View>
       </View>
 
+      {/* Buscador fijo arriba — fuera del FlatList para que el teclado no tape la lista */}
+      <View style={[styles.searchBox, shadows.sm]}>
+        <MaterialCommunityIcons name="magnify" size={20} color={colors.subtext} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Buscar productos..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholderTextColor={colors.subtext}
+        />
+        {searchQuery.length > 0 && (
+          <Pressable onPress={() => setSearchQuery("")}>
+            <MaterialCommunityIcons name="close-circle" size={18} color={colors.subtext} />
+          </Pressable>
+        )}
+      </View>
+
       <FlatList
-        data={filteredItems}
-        keyExtractor={(item) => item.id}
+        data={listData as any}
+        keyExtractor={(entry: any) => entry.key}
         onRefresh={handleRefresh}
         refreshing={refreshing}
         keyboardShouldPersistTaps="handled"
@@ -509,23 +564,6 @@ export function PantriesScreen() {
               </View>
             )}
 
-            {/* Búsqueda */}
-            <View style={[styles.searchBox, shadows.sm]}>
-              <MaterialCommunityIcons name="magnify" size={20} color={colors.subtext} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Buscar productos..."
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholderTextColor={colors.subtext}
-              />
-              {searchQuery.length > 0 && (
-                <Pressable onPress={() => setSearchQuery("")}>
-                  <MaterialCommunityIcons name="close-circle" size={18} color={colors.subtext} />
-                </Pressable>
-              )}
-            </View>
-
             {/* Filtro de ubicación */}
             <FlatList
               horizontal
@@ -546,46 +584,79 @@ export function PantriesScreen() {
               )}
             />
 
-            {/* Tarjetas de caducidad — toca para filtrar, toca de nuevo para quitar */}
-            <View style={styles.expiryCardsRow}>
-              {(["normal", "proximo", "caducado"] as const).map((key) => {
-                const cfg = EXPIRY_CARD_CONFIG[key];
-                const count = expirySummary[key];
-                const active = selectedExpiry === key;
-                return (
-                  <Pressable
-                    key={key}
-                    onPress={() => setSelectedExpiry(active ? "all" : key)}
-                    style={[
-                      styles.expiryCard,
-                      { borderColor: cfg.color, backgroundColor: active ? cfg.color : cfg.lightBg },
-                    ]}
-                  >
-                    <MaterialCommunityIcons name={cfg.icon} size={22} color={active ? "#fff" : cfg.color} />
-                    <Text style={[styles.expiryCardCount, { color: active ? "#fff" : cfg.color }]}>{count}</Text>
-                    <Text style={[styles.expiryCardLabel, { color: active ? "rgba(255,255,255,0.85)" : colors.subtext }]}>
-                      {cfg.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+            {/* Toggle de vista */}
+            <View style={styles.viewToggleRow}>
+              <Pressable
+                onPress={() => setViewMode("expiry")}
+                style={[styles.viewToggleChip, viewMode === "expiry" && styles.viewToggleChipActive]}
+              >
+                <MaterialCommunityIcons
+                  name="clock-outline"
+                  size={13}
+                  color={viewMode === "expiry" ? colors.white : colors.primary}
+                />
+                <Text style={[styles.viewToggleText, viewMode === "expiry" && styles.viewToggleTextActive]}>
+                  Caducidad
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setViewMode("category")}
+                style={[styles.viewToggleChip, viewMode === "category" && styles.viewToggleChipActive]}
+              >
+                <MaterialCommunityIcons
+                  name="tag-multiple-outline"
+                  size={13}
+                  color={viewMode === "category" ? colors.white : colors.primary}
+                />
+                <Text style={[styles.viewToggleText, viewMode === "category" && styles.viewToggleTextActive]}>
+                  Categoría
+                </Text>
+              </Pressable>
             </View>
 
-            {/* Próximo a caducar */}
-            {closestExpiry && (
-              <View style={styles.closestCard}>
-                <MaterialCommunityIcons
-                  name={getExpiryStatus(closestExpiry.expiry_date) === "caducado" ? "alert-circle" : "clock-alert"}
-                  size={22}
-                  color={getExpiryStatus(closestExpiry.expiry_date) === "caducado" ? colors.error : "#E67E22"}
-                />
-                <View style={styles.closestText}>
-                  <Text style={styles.closestTitle}>Más próximo a caducar</Text>
-                  <Text style={styles.closestSubtitle}>
-                    {closestExpiry.product.name} · {new Date(closestExpiry.expiry_date).toLocaleDateString("es-ES")}
-                  </Text>
+            {/* Tarjetas de caducidad — solo en modo caducidad */}
+            {viewMode === "expiry" && (
+              <>
+                <View style={styles.expiryCardsRow}>
+                  {(["normal", "proximo", "caducado"] as const).map((key) => {
+                    const cfg = EXPIRY_CARD_CONFIG[key];
+                    const count = expirySummary[key];
+                    const active = selectedExpiry === key;
+                    return (
+                      <Pressable
+                        key={key}
+                        onPress={() => setSelectedExpiry(active ? "all" : key)}
+                        style={[
+                          styles.expiryCard,
+                          { borderColor: cfg.color, backgroundColor: active ? cfg.color : cfg.lightBg },
+                        ]}
+                      >
+                        <MaterialCommunityIcons name={cfg.icon} size={22} color={active ? "#fff" : cfg.color} />
+                        <Text style={[styles.expiryCardCount, { color: active ? "#fff" : cfg.color }]}>{count}</Text>
+                        <Text style={[styles.expiryCardLabel, { color: active ? "rgba(255,255,255,0.85)" : colors.subtext }]}>
+                          {cfg.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
-              </View>
+
+                {closestExpiry && (
+                  <View style={styles.closestCard}>
+                    <MaterialCommunityIcons
+                      name={getExpiryStatus(closestExpiry.expiry_date) === "caducado" ? "alert-circle" : "clock-alert"}
+                      size={22}
+                      color={getExpiryStatus(closestExpiry.expiry_date) === "caducado" ? colors.error : "#E67E22"}
+                    />
+                    <View style={styles.closestText}>
+                      <Text style={styles.closestTitle}>Más próximo a caducar</Text>
+                      <Text style={styles.closestSubtitle}>
+                        {closestExpiry.product.name} · {new Date(closestExpiry.expiry_date).toLocaleDateString("es-ES")}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </>
             )}
           </View>
         }
@@ -603,24 +674,42 @@ export function PantriesScreen() {
             />
           </View>
         }
-        renderItem={({ item }) => (
-          <View style={styles.itemWrapper}>
-            <ProductCard
-              name={item.product.name}
-              brand={item.product.brand}
-              quantity={item.quantity}
-              unit={item.unit}
-              location={LOCATION_DISPLAY[item.location] || item.location}
-              expiryDate={item.expiry_date}
-              status={getExpiryStatus(item.expiry_date)}
-              imageUrl={localImages[item.product.id] || item.product.image_url}
-              addedBy={item.added_by?.name}
-              onEdit={() => handleEditItem(item)}
-              onDelete={() => handleDeleteItem(item)}
-            />
-          </View>
-        )}
+        renderItem={({ item: entry }: { item: FlatListEntry }) => {
+          if (entry._type === "header") {
+            const cfg = CATEGORY_CONFIG[entry.catKey] ?? CATEGORY_CONFIG.otros;
+            return (
+              <View style={[styles.categoryHeader, { borderLeftColor: cfg.color }]}>
+                <View style={[styles.categoryHeaderIcon, { backgroundColor: cfg.color + "22" }]}>
+                  <MaterialCommunityIcons name={cfg.icon as any} size={16} color={cfg.color} />
+                </View>
+                <Text style={[styles.categoryHeaderLabel, { color: cfg.color }]}>{cfg.label}</Text>
+                <View style={[styles.categoryHeaderBadge, { backgroundColor: cfg.color }]}>
+                  <Text style={styles.categoryHeaderCount}>{entry.count}</Text>
+                </View>
+              </View>
+            );
+          }
+          return (
+            <View style={styles.itemWrapper}>
+              <ProductCard
+                name={entry.item.product.name}
+                brand={entry.item.product.brand}
+                category={entry.item.product.category}
+                quantity={entry.item.quantity}
+                unit={entry.item.unit}
+                location={LOCATION_DISPLAY[entry.item.location] || entry.item.location}
+                expiryDate={entry.item.expiry_date}
+                status={getExpiryStatus(entry.item.expiry_date)}
+                imageUrl={localImages[entry.item.product.id] || entry.item.product.image_url}
+                addedBy={entry.item.added_by?.name}
+                onEdit={() => handleEditItem(entry.item)}
+                onDelete={() => handleDeleteItem(entry.item)}
+              />
+            </View>
+          );
+        }}
       />
+
       {/* Modal compartir despensa */}
       <Modal visible={shareModalVisible} transparent animationType="fade" onRequestClose={() => setShareModalVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
@@ -628,7 +717,6 @@ export function PantriesScreen() {
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Compartir despensa</Text>
 
-            {/* Sección: compartir */}
             <View style={styles.modalSection}>
               <Text style={styles.modalSectionTitle}>Invita a alguien</Text>
               <Text style={styles.modalDesc}>Comparte este enlace con la persona que quieras añadir a tu despensa.</Text>
@@ -638,7 +726,7 @@ export function PantriesScreen() {
                 <>
                   <View style={styles.tokenBox}>
                     <Text style={styles.tokenText} numberOfLines={2}>
-                      {shareToken.startsWith("http") ? shareToken : `https://nutricasa.duckdns.org/pantry/shared/${shareToken}`}
+                      {`nutricasa://pantry/shared/${shareToken.replace(/^.*\//, "")}`}
                     </Text>
                   </View>
                   <Pressable onPress={handleCopyOrShare} style={styles.copyButton}>
@@ -653,14 +741,11 @@ export function PantriesScreen() {
               )}
             </View>
 
-            {/* Sección: miembros */}
             {pantryMembers.length > 0 && (
               <>
                 <View style={styles.divider} />
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>
-                    Miembros ({pantryMembers.length})
-                  </Text>
+                  <Text style={styles.modalSectionTitle}>Miembros ({pantryMembers.length})</Text>
                   {pantryMembers.map((m) => (
                     <View key={m.id} style={styles.memberRow}>
                       <View style={styles.memberAvatar}>
@@ -683,10 +768,8 @@ export function PantriesScreen() {
               </>
             )}
 
-            {/* Divisor */}
             <View style={styles.divider} />
 
-            {/* Sección: unirse */}
             <View style={styles.modalSection}>
               <Text style={styles.modalSectionTitle}>Unirse a una despensa</Text>
               <Text style={styles.modalDesc}>Introduce el código o pega el enlace de invitación.</Text>
@@ -700,9 +783,7 @@ export function PantriesScreen() {
               />
               {joinError && <Text style={styles.joinError}>{joinError}</Text>}
               <Pressable onPress={handleJoin} disabled={joinLoading} style={styles.joinButton}>
-                {joinLoading
-                  ? <ActivityIndicator color={colors.white} />
-                  : <Text style={styles.joinButtonText}>Unirse</Text>}
+                {joinLoading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.joinButtonText}>Unirse</Text>}
               </Pressable>
             </View>
 
@@ -713,7 +794,7 @@ export function PantriesScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Modal crear nueva despensa (desde el selector de chips) */}
+      {/* Modal crear nueva despensa */}
       <Modal visible={createModalVisible} transparent animationType="fade" onRequestClose={() => setCreateModalVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
           <Pressable style={styles.modalBackdrop} onPress={() => setCreateModalVisible(false)} />
@@ -729,9 +810,7 @@ export function PantriesScreen() {
               maxLength={60}
             />
             <Pressable onPress={handleCreatePantry} disabled={createLoading} style={styles.joinButton}>
-              {createLoading
-                ? <ActivityIndicator color={colors.white} />
-                : <Text style={styles.joinButtonText}>Crear</Text>}
+              {createLoading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.joinButtonText}>Crear</Text>}
             </Pressable>
             <Pressable onPress={() => setCreateModalVisible(false)} style={styles.modalClose}>
               <Text style={styles.modalCloseText}>Cancelar</Text>
@@ -744,376 +823,159 @@ export function PantriesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.white,
-  },
-  centerContent: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  createContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: spacing.xl,
-  },
-  createTitle: {
-    ...typography.h2,
-    color: colors.text,
-    textAlign: "center",
-    marginBottom: spacing.md,
-  },
-  createSubtitle: {
-    ...typography.body,
-    color: colors.subtext,
-    textAlign: "center",
-    marginBottom: spacing.xl,
-  },
+  container: { flex: 1, backgroundColor: colors.white },
+  centerContent: { flex: 1, justifyContent: "center", alignItems: "center" },
+  createContainer: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: spacing.xl },
+  createTitle: { ...typography.h2, color: colors.text, textAlign: "center", marginBottom: spacing.md },
+  createSubtitle: { ...typography.body, color: colors.subtext, textAlign: "center", marginBottom: spacing.xl },
   createButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
+    flexDirection: "row", alignItems: "center", gap: spacing.sm,
+    backgroundColor: colors.primary, paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md, borderRadius: borderRadius.md,
   },
-  createButtonText: {
-    ...typography.body,
-    color: colors.white,
-    fontWeight: "700",
-  },
+  createButtonText: { ...typography.body, color: colors.white, fontWeight: "700" },
   joinPantryButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.white,
+    flexDirection: "row", alignItems: "center", gap: spacing.sm,
+    marginTop: spacing.md, paddingHorizontal: spacing.xl, paddingVertical: spacing.md,
+    borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.white,
   },
-  joinPantryButtonText: {
-    ...typography.body,
-    color: colors.primary,
-    fontWeight: "600",
-  },
-  modalDesc: {
-    ...typography.bodySm,
-    color: colors.subtext,
-    marginBottom: spacing.md,
-  },
+  joinPantryButtonText: { ...typography.body, color: colors.primary, fontWeight: "600" },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E5E5",
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+    borderBottomWidth: 1, borderBottomColor: "#E5E5E5",
   },
-  headerTitle: {
-    ...typography.h2,
-    color: colors.text,
-  },
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
+  headerTitle: { ...typography.h2, color: colors.text },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   shareButton: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    justifyContent: "center",
-    alignItems: "center",
+    width: 44, height: 44, borderRadius: borderRadius.full,
+    borderWidth: 1, borderColor: colors.primary, justifyContent: "center", alignItems: "center",
   },
   addButton: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.primary,
-    justifyContent: "center",
-    alignItems: "center",
+    width: 44, height: 44, borderRadius: borderRadius.full,
+    backgroundColor: colors.primary, justifyContent: "center", alignItems: "center",
   },
   searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: spacing.lg,
-    marginVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: "#E5E5E5",
+    flexDirection: "row", alignItems: "center",
+    marginHorizontal: spacing.lg, marginVertical: spacing.md,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    backgroundColor: colors.white, borderRadius: borderRadius.md,
+    borderWidth: 1, borderColor: "#E5E5E5",
   },
-  searchInput: {
-    flex: 1,
-    marginLeft: spacing.sm,
-    ...typography.body,
-    color: colors.text,
-  },
-  locationFilterRow: {
-    marginBottom: spacing.md,
-  },
-  locationFilterContent: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
-  },
+  searchInput: { flex: 1, marginLeft: spacing.sm, ...typography.body, color: colors.text },
+  locationFilterRow: { marginBottom: spacing.sm },
+  locationFilterContent: { paddingHorizontal: spacing.lg, gap: spacing.sm },
   filterChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.white,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.white,
   },
-  filterChipActive: {
-    backgroundColor: colors.primary,
+  filterChipActive: { backgroundColor: colors.primary },
+  filterChipText: { ...typography.bodySm, color: colors.primary },
+  filterChipTextActive: { color: colors.white },
+  viewToggleRow: {
+    flexDirection: "row", gap: spacing.sm,
+    paddingHorizontal: spacing.lg, marginBottom: spacing.md, marginTop: spacing.xs,
   },
-  filterChipText: {
-    ...typography.bodySm,
-    color: colors.primary,
+  viewToggleChip: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full, borderWidth: 1.5, borderColor: colors.primary, backgroundColor: colors.white,
   },
-  filterChipTextActive: {
-    color: colors.white,
-  },
+  viewToggleChipActive: { backgroundColor: colors.primary },
+  viewToggleText: { ...typography.bodySm, color: colors.primary, fontWeight: "600" },
+  viewToggleTextActive: { color: colors.white },
   expiryCardsRow: {
-    flexDirection: "row",
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    flexDirection: "row", gap: spacing.sm,
+    paddingHorizontal: spacing.lg, marginBottom: spacing.md,
   },
   expiryCard: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1.5,
-    gap: spacing.xs,
+    flex: 1, alignItems: "center", paddingVertical: spacing.md,
+    borderRadius: borderRadius.md, borderWidth: 1.5, gap: spacing.xs,
   },
-  expiryCardCount: {
-    ...typography.h2,
-    fontWeight: "700",
-  },
-  expiryCardLabel: {
-    ...typography.bodySm,
-    fontWeight: "600",
-  },
+  expiryCardCount: { ...typography.h2, fontWeight: "700" },
+  expiryCardLabel: { ...typography.bodySm, fontWeight: "600" },
   closestCard: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
+    marginHorizontal: spacing.lg, marginBottom: spacing.md,
+    flexDirection: "row", alignItems: "center", gap: spacing.md,
+    padding: spacing.md, borderRadius: borderRadius.md, backgroundColor: colors.secondary,
+  },
+  closestText: { flex: 1 },
+  closestTitle: { ...typography.body, color: colors.text, fontWeight: "700" },
+  closestSubtitle: { ...typography.bodySm, color: colors.subtext, marginTop: spacing.xs },
+  categoryHeader: {
+    flexDirection: "row", alignItems: "center", gap: spacing.sm,
+    marginHorizontal: spacing.lg, marginTop: spacing.lg, marginBottom: spacing.sm,
+    paddingVertical: spacing.sm, paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md, borderLeftWidth: 4,
     backgroundColor: colors.secondary,
   },
-  closestText: {
-    flex: 1,
+  categoryHeaderIcon: {
+    width: 28, height: 28, borderRadius: 14,
+    justifyContent: "center", alignItems: "center",
   },
-  closestTitle: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: "700",
+  categoryHeaderLabel: { ...typography.body, fontWeight: "700", flex: 1 },
+  categoryHeaderBadge: {
+    minWidth: 22, height: 22, borderRadius: 11,
+    justifyContent: "center", alignItems: "center", paddingHorizontal: 6,
   },
-  closestSubtitle: {
-    ...typography.bodySm,
-    color: colors.subtext,
-    marginTop: spacing.xs,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-  },
-  listContent: {
-    paddingBottom: spacing.xl,
-  },
-  itemWrapper: {
-    marginBottom: spacing.lg,
-    paddingHorizontal: spacing.lg,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.5)",
-  },
+  categoryHeaderCount: { ...typography.caption, color: colors.white, fontWeight: "700" },
+  emptyContainer: { flex: 1, justifyContent: "center" },
+  listContent: { paddingBottom: spacing.xl },
+  itemWrapper: { marginBottom: spacing.sm, paddingHorizontal: spacing.lg },
+  modalOverlay: { flex: 1, justifyContent: "center", alignItems: "center" },
+  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.5)" },
   modalCard: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    width: "88%",
-    maxWidth: 420,
+    backgroundColor: colors.white, borderRadius: borderRadius.lg,
+    padding: spacing.lg, width: "88%", maxWidth: 420,
   },
-  modalTitle: {
-    ...typography.h2,
-    color: colors.text,
-    textAlign: "center",
-    marginBottom: spacing.lg,
-  },
-  modalSection: {
-    marginBottom: spacing.md,
-  },
-  modalSectionTitle: {
-    ...typography.body,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  modalDesc: {
-    ...typography.bodySm,
-    color: colors.subtext,
-    marginBottom: spacing.md,
-  },
-  tokenBox: {
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  tokenText: {
-    ...typography.bodySm,
-    color: colors.text,
-    fontFamily: "monospace",
-  },
+  modalTitle: { ...typography.h2, color: colors.text, textAlign: "center", marginBottom: spacing.lg },
+  modalSection: { marginBottom: spacing.md },
+  modalSectionTitle: { ...typography.body, fontWeight: "700", color: colors.text, marginBottom: spacing.xs },
+  modalDesc: { ...typography.bodySm, color: colors.subtext, marginBottom: spacing.md },
+  tokenBox: { backgroundColor: colors.secondary, borderRadius: borderRadius.md, padding: spacing.md, marginBottom: spacing.md },
+  tokenText: { ...typography.bodySm, color: colors.text, fontFamily: "monospace" },
   copyButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.sm,
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: spacing.sm, backgroundColor: colors.primary, borderRadius: borderRadius.md, paddingVertical: spacing.md,
   },
-  copyButtonText: {
-    ...typography.body,
-    color: colors.white,
-    fontWeight: "700",
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: spacing.lg,
-  },
-  memberRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-  },
+  copyButtonText: { ...typography.body, color: colors.white, fontWeight: "700" },
+  divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.lg },
+  memberRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: spacing.sm },
   memberAvatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: colors.primary, alignItems: "center", justifyContent: "center",
   },
-  memberName: {
-    ...typography.bodySm,
-    color: colors.text,
-    fontWeight: "600",
-  },
-  memberEmail: {
-    ...typography.caption,
-    color: colors.subtext,
-  },
-  memberRoleBadge: {
-    ...typography.caption,
-    color: colors.primary,
-    fontWeight: "700",
-  },
+  memberName: { ...typography.bodySm, color: colors.text, fontWeight: "600" },
+  memberEmail: { ...typography.caption, color: colors.subtext },
+  memberRoleBadge: { ...typography.caption, color: colors.primary, fontWeight: "700" },
   joinInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    ...typography.body,
-    color: colors.text,
-    marginBottom: spacing.sm,
+    borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.md,
+    ...typography.body, color: colors.text, marginBottom: spacing.sm,
   },
-  joinError: {
-    ...typography.bodySm,
-    color: colors.error,
-    marginBottom: spacing.sm,
-  },
+  joinError: { ...typography.bodySm, color: colors.error, marginBottom: spacing.sm },
   joinButton: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
-    alignItems: "center",
+    backgroundColor: colors.primary, borderRadius: borderRadius.md,
+    paddingVertical: spacing.md, alignItems: "center",
   },
-  joinButtonText: {
-    ...typography.body,
-    color: colors.white,
-    fontWeight: "700",
-  },
-  modalClose: {
-    marginTop: spacing.lg,
-    alignItems: "center",
-  },
-  modalCloseText: {
-    ...typography.bodySm,
-    color: colors.subtext,
-    fontWeight: "600",
-  },
-  pantrySelectorRow: {
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E5E5",
-  },
-  pantrySelectorContent: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
-  },
+  joinButtonText: { ...typography.body, color: colors.white, fontWeight: "700" },
+  modalClose: { marginTop: spacing.lg, alignItems: "center" },
+  modalCloseText: { ...typography.bodySm, color: colors.subtext, fontWeight: "600" },
+  pantrySelectorRow: { borderBottomWidth: 1, borderBottomColor: "#E5E5E5" },
+  pantrySelectorContent: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, gap: spacing.sm },
   pantryChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.white,
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.white,
   },
-  pantryChipActive: {
-    backgroundColor: colors.primary,
-  },
-  pantryChipDisabled: {
-    opacity: 0.5,
-  },
+  pantryChipActive: { backgroundColor: colors.primary },
+  pantryChipDisabled: { opacity: 0.5 },
   pantryChipNew: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderStyle: "dashed",
-    backgroundColor: colors.white,
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.primary,
+    borderStyle: "dashed", backgroundColor: colors.white,
   },
-  pantryChipText: {
-    ...typography.bodySm,
-    color: colors.primary,
-    fontWeight: "600",
-  },
-  pantryChipTextActive: {
-    color: colors.white,
-  },
+  pantryChipText: { ...typography.bodySm, color: colors.primary, fontWeight: "600" },
+  pantryChipTextActive: { color: colors.white },
 });

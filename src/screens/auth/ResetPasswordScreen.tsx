@@ -76,7 +76,7 @@ export function ResetPasswordScreen() {
             </Text>
           </View>
           <PrimaryButton
-            title="Ir al login"
+            label="Ir al login"
             onPress={() => navigation.navigate("Login")}
             style={styles.btn}
           />
@@ -138,25 +138,30 @@ export function ResetPasswordScreen() {
                 minLength: { value: 8, message: "Mínimo 8 caracteres" },
               }}
               render={({ field: { onChange, onBlur, value } }) => (
-                <InputField
-                  label="Nueva contraseña"
-                  placeholder="••••••••"
-                  icon="lock"
-                  rightIcon={
-                    <Pressable onPress={() => setShowPassword(!showPassword)} hitSlop={10}>
-                      <MaterialCommunityIcons
-                        name={showPassword ? "eye" : "eye-off"}
-                        size={20}
-                        color={colors.subtext}
-                      />
-                    </Pressable>
-                  }
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  secureTextEntry={!showPassword}
-                  error={errors.password?.message}
-                />
+                <View>
+                  <InputField
+                    label="Nueva contraseña"
+                    placeholder="••••••••"
+                    icon="lock"
+                    rightIcon={
+                      <Pressable onPress={() => setShowPassword(!showPassword)} hitSlop={10}>
+                        <MaterialCommunityIcons
+                          name={showPassword ? "eye" : "eye-off"}
+                          size={20}
+                          color={colors.subtext}
+                        />
+                      </Pressable>
+                    }
+                    value={value}
+                    onChangeText={onChange}
+                    onBlur={onBlur}
+                    secureTextEntry={!showPassword}
+                    error={errors.password?.message}
+                  />
+                  {!errors.password && (
+                    <Text style={styles.hint}>Mínimo 8 caracteres</Text>
+                  )}
+                </View>
               )}
             />
 
@@ -199,8 +204,9 @@ export function ResetPasswordScreen() {
           </View>
 
           <PrimaryButton
-            title={loading ? "Guardando..." : "Guardar contraseña"}
+            label="Guardar contraseña"
             onPress={handleSubmit(onSubmit)}
+            loading={loading}
             style={styles.btn}
           />
         </ScrollView>
@@ -228,6 +234,13 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: spacing.sm,
     alignItems: "center",
+  },
+  hint: {
+    ...typography.caption,
+    color: colors.subtext,
+    marginTop: -spacing.sm,
+    marginBottom: spacing.sm,
+    marginLeft: spacing.xs,
   },
   errorText: { ...typography.bodySm, color: colors.error, flex: 1 },
   btn: { marginBottom: spacing.lg },

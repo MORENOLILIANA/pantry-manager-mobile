@@ -50,6 +50,13 @@ type EditState = {
   notes: string;
 };
 
+type AddDraftState = {
+  name: string;
+  quantity: number;
+  unit: string;
+  notes: string;
+};
+
 function ItemAvatar({ name, purchased }: { name: string; purchased: boolean }) {
   const letter = (name || "?").trim().charAt(0).toUpperCase();
   if (purchased) {
@@ -94,6 +101,7 @@ export function ShoppingListsScreen() {
   const [addingItem, setAddingItem] = useState(false);
   const [newItemText, setNewItemText] = useState("");
   const [editState, setEditState] = useState<EditState | null>(null);
+  const [addDraftState, setAddDraftState] = useState<AddDraftState | null>(null);
   const [saving, setSaving] = useState(false);
   const [purchasedExpanded, setPurchasedExpanded] = useState(true);
   const textInputRef = useRef<TextInput>(null);
@@ -147,8 +155,14 @@ export function ShoppingListsScreen() {
     setRefreshing(false);
   };
 
-  const handleAddItem = async () => {
+  const handleOpenAddModal = () => {
     if (!newItemText.trim()) return;
+    Keyboard.dismiss();
+    setAddDraftState({ name: newItemText.trim(), quantity: 1, unit: "ud", notes: "" });
+  };
+
+  const handleConfirmAdd = async () => {
+    if (!addDraftState || !addDraftState.name.trim()) return;
     try {
       setAddingItem(true);
       let targetList = list;
@@ -158,13 +172,14 @@ export function ShoppingListsScreen() {
         setList(targetList);
       }
       const newItem = await addShoppingItem(targetList.id, {
-        name: newItemText.trim(),
-        quantity: 1,
-        unit: "ud",
+        name: addDraftState.name.trim(),
+        quantity: addDraftState.quantity,
+        unit: addDraftState.unit,
+        notes: addDraftState.notes.trim() || undefined,
       });
       setList({ ...targetList, items: [...(targetList.items || []), newItem] });
       setNewItemText("");
-      Keyboard.dismiss();
+      setAddDraftState(null);
     } catch (error) {
       console.error("Error adding item:", error);
       Alert.alert("Error", "No se pudo añadir el producto");
@@ -195,7 +210,7 @@ export function ShoppingListsScreen() {
     setEditState({
       item,
       name: item.name,
-      quantity: item.quantity,
+      quantity: Math.round(Number(item.quantity)) || 1,
       unit: item.unit,
       notes: item.notes || "",
     });
@@ -332,11 +347,7 @@ export function ShoppingListsScreen() {
   const allDone = totalCount > 0 && purchasedCount === totalCount;
 
   const renderPendingItem = ({ item }: { item: ShoppingListItem }) => (
-    <Pressable
-      style={({ pressed }) => [styles.itemCard, pressed && styles.itemCardPressed]}
-      onPress={() => handleOpenEdit(item)}
-      onLongPress={() => handleDeleteItem(item)}
-    >
+    <View style={styles.itemCard}>
       <Pressable onPress={() => handleTogglePurchased(item)} hitSlop={10}>
         <ItemAvatar name={item.name} purchased={false} />
       </Pressable>
@@ -353,10 +364,15 @@ export function ShoppingListsScreen() {
         </View>
       </View>
 
-      <Pressable onPress={() => handleDeleteItem(item)} hitSlop={8} style={styles.trashBtn}>
-        <MaterialCommunityIcons name="close" size={18} color={colors.placeholder} />
-      </Pressable>
-    </Pressable>
+      <View style={styles.itemActions}>
+        <Pressable onPress={() => handleOpenEdit(item)} hitSlop={8} style={styles.editBtn}>
+          <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.primary} />
+        </Pressable>
+        <Pressable onPress={() => handleDeleteItem(item)} hitSlop={8} style={styles.trashBtn}>
+          <MaterialCommunityIcons name="trash-can" size={18} color={colors.error} />
+        </Pressable>
+      </View>
+    </View>
   );
 
   const renderPurchasedItem = ({ item }: { item: ShoppingListItem }) => (
@@ -512,13 +528,13 @@ export function ShoppingListsScreen() {
               placeholderTextColor={colors.placeholder}
               value={newItemText}
               onChangeText={setNewItemText}
-              onSubmitEditing={handleAddItem}
+              onSubmitEditing={handleOpenAddModal}
               editable={!addingItem}
               returnKeyType="done"
             />
 
             <Pressable
-              onPress={handleAddItem}
+              onPress={handleOpenAddModal}
               disabled={addingItem || !newItemText.trim()}
               style={[
                 styles.sendBtn,
@@ -562,7 +578,7 @@ export function ShoppingListsScreen() {
             <View style={styles.qtyRow}>
               <Pressable
                 onPress={() =>
-                  setEditState((s) => (s ? { ...s, quantity: Math.max(1, s.quantity - 1) } : s))
+                  setEditState((s) => (s ? { ...s, quantity: Math.max(1, Math.round(s.quantity) - 1) } : s))
                 }
                 style={styles.qtyStepBtn}
               >
@@ -571,7 +587,7 @@ export function ShoppingListsScreen() {
               <Text style={styles.qtyValue}>{editState?.quantity ?? 1}</Text>
               <Pressable
                 onPress={() =>
-                  setEditState((s) => (s ? { ...s, quantity: s.quantity + 1 } : s))
+                  setEditState((s) => (s ? { ...s, quantity: Math.round(s.quantity) + 1 } : s))
                 }
                 style={styles.qtyStepBtn}
               >
@@ -617,6 +633,95 @@ export function ShoppingListsScreen() {
                   <ActivityIndicator size="small" color={colors.white} />
                 ) : (
                   <Text style={styles.saveBtnText}>Guardar</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add product modal */}
+      <Modal
+        visible={addDraftState !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAddDraftState(null)}
+      >
+        <View style={styles.modalWrapper}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setAddDraftState(null)} />
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Añadir producto</Text>
+
+            <Text style={styles.fieldLabel}>Nombre</Text>
+            <TextInput
+              style={styles.fieldInput}
+              value={addDraftState?.name}
+              onChangeText={(t) => setAddDraftState((s) => (s ? { ...s, name: t } : s))}
+              placeholder="Nombre del producto"
+              placeholderTextColor={colors.placeholder}
+              autoFocus
+            />
+
+            <Text style={styles.fieldLabel}>Cantidad</Text>
+            <View style={styles.qtyRow}>
+              <Pressable
+                onPress={() =>
+                  setAddDraftState((s) => (s ? { ...s, quantity: Math.max(1, s.quantity - 1) } : s))
+                }
+                style={styles.qtyStepBtn}
+              >
+                <MaterialCommunityIcons name="minus" size={20} color={colors.text} />
+              </Pressable>
+              <Text style={styles.qtyValue}>{addDraftState?.quantity ?? 1}</Text>
+              <Pressable
+                onPress={() =>
+                  setAddDraftState((s) => (s ? { ...s, quantity: s.quantity + 1 } : s))
+                }
+                style={styles.qtyStepBtn}
+              >
+                <MaterialCommunityIcons name="plus" size={20} color={colors.text} />
+              </Pressable>
+            </View>
+
+            <Text style={styles.fieldLabel}>Unidad</Text>
+            <View style={styles.unitRow}>
+              {UNITS.map((u) => (
+                <Pressable
+                  key={u}
+                  onPress={() => setAddDraftState((s) => (s ? { ...s, unit: u } : s))}
+                  style={[styles.unitChip, addDraftState?.unit === u && styles.unitChipActive]}
+                >
+                  <Text
+                    style={[
+                      styles.unitChipText,
+                      addDraftState?.unit === u && styles.unitChipTextActive,
+                    ]}
+                  >
+                    {u}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={styles.fieldLabel}>Notas (opcional)</Text>
+            <TextInput
+              style={styles.fieldInput}
+              value={addDraftState?.notes}
+              onChangeText={(t) => setAddDraftState((s) => (s ? { ...s, notes: t } : s))}
+              placeholder="Ej. sin sal, marca X..."
+              placeholderTextColor={colors.placeholder}
+            />
+
+            <View style={styles.modalButtons}>
+              <Pressable style={styles.cancelBtn} onPress={() => setAddDraftState(null)}>
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </Pressable>
+              <Pressable style={styles.saveBtn} onPress={handleConfirmAdd} disabled={addingItem}>
+                {addingItem ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <Text style={styles.saveBtnText}>Añadir</Text>
                 )}
               </Pressable>
             </View>
@@ -804,6 +909,14 @@ const styles = StyleSheet.create({
     color: colors.subtext,
     fontStyle: "italic",
     flex: 1,
+  },
+  itemActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  editBtn: {
+    padding: spacing.xs,
   },
   trashBtn: {
     padding: spacing.xs,

@@ -40,7 +40,7 @@ export type DashboardStackParamList = {
 };
 
 export type PantriesStackParamList = {
-  Pantries: undefined;
+  Pantries: { _updatedItem?: PantryItem } | undefined;
   Products:
     | {
         pantryId: string;

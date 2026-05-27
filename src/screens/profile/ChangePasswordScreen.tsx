@@ -29,7 +29,7 @@ interface FormData {
 
 export function ChangePasswordScreen() {
   const navigation = useNavigation<Navigation>();
-  const { control, handleSubmit, watch, reset } = useForm<FormData>({
+  const { control, handleSubmit, watch, reset, formState: { errors } } = useForm<FormData>({
     defaultValues: {
       currentPassword: "",
       newPassword: "",
@@ -140,30 +140,39 @@ export function ChangePasswordScreen() {
           <Controller
             control={control}
             name="newPassword"
-            rules={{ required: "La nueva contraseña es requerida" }}
+            rules={{
+              required: "La nueva contraseña es requerida",
+              minLength: { value: 8, message: "Mínimo 8 caracteres" },
+            }}
             render={({ field: { value, onChange } }) => (
-              <InputField
-                label="Nueva contraseña"
-                value={value}
-                onChangeText={onChange}
-                placeholder="Introduce tu nueva contraseña"
-                secureTextEntry={!showNewPassword}
-                icon="lock"
-                rightIcon={
-                  <Pressable
-                    onPress={() => setShowNewPassword(!showNewPassword)}
-                    hitSlop={10}
-                    accessibilityRole="button"
-                    accessibilityLabel={showNewPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-                  >
-                    <MaterialCommunityIcons
-                      name={showNewPassword ? "eye" : "eye-off"}
-                      size={20}
-                      color={colors.subtext}
-                    />
-                  </Pressable>
-                }
-              />
+              <View>
+                <InputField
+                  label="Nueva contraseña"
+                  value={value}
+                  onChangeText={onChange}
+                  placeholder="Introduce tu nueva contraseña"
+                  secureTextEntry={!showNewPassword}
+                  icon="lock"
+                  rightIcon={
+                    <Pressable
+                      onPress={() => setShowNewPassword(!showNewPassword)}
+                      hitSlop={10}
+                      accessibilityRole="button"
+                      accessibilityLabel={showNewPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    >
+                      <MaterialCommunityIcons
+                        name={showNewPassword ? "eye" : "eye-off"}
+                        size={20}
+                        color={colors.subtext}
+                      />
+                    </Pressable>
+                  }
+                  error={errors.newPassword?.message}
+                />
+                {!errors.newPassword && (
+                  <Text style={styles.hint}>Mínimo 8 caracteres</Text>
+                )}
+              </View>
             )}
           />
 
@@ -261,6 +270,13 @@ const styles = StyleSheet.create({
     color: colors.subtext,
     marginBottom: spacing.xl,
     lineHeight: 22,
+  },
+  hint: {
+    ...typography.caption,
+    color: colors.subtext,
+    marginTop: -spacing.sm,
+    marginBottom: spacing.sm,
+    marginLeft: spacing.xs,
   },
   errorMessage: {
     flexDirection: "row",

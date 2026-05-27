@@ -7,9 +7,26 @@ type Status = "normal" | "proximo" | "caducado";
 
 const IMAGE_SIZE = 64;
 
+function getCategoryIcon(category?: string): string {
+  if (!category) return "package-variant";
+  const s = category.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  if (/(lact|leche|queso|yogur|nata|mantequilla)/.test(s)) return "cup";
+  if (/(carne|pollo|cerdo|ternera|pesc|mariscos|jamon|embutid|salchich)/.test(s)) return "food-drumstick";
+  if (/(fruta|verdura|vegetal|legumbre|hortaliza)/.test(s)) return "food-apple";
+  if (/(cereal|pasta|arroz|pan|harina|galleta|avena)/.test(s)) return "bread-slice";
+  if (/(bebida|zumo|agua|refresc|cafe|vino|cerveza)/.test(s)) return "bottle-wine";
+  if (/(conserva|lata|bote|enlatad)/.test(s)) return "archive";
+  if (/congelad/.test(s)) return "snowflake";
+  if (/(fruto.seco|nuez|almendra|pistacho|anacardo|avellana|cacahuete)/.test(s)) return "food-variant";
+  if (/(limpiez|detergente|jabón|jabon|suavizante|limpiad|bayeta)/.test(s)) return "broom";
+  if (/(higiene|champu|gel de|pasta diente|desodorante)/.test(s)) return "shower";
+  return "package-variant";
+}
+
 type Props = {
   name: string;
   brand?: string;
+  category?: string;
   quantity: number;
   unit: string;
   location: string;
@@ -24,6 +41,7 @@ type Props = {
 export function ProductCard({
   name,
   brand,
+  category,
   quantity,
   unit,
   expiryDate,
@@ -60,7 +78,7 @@ export function ProductCard({
           ) : (
             <View style={styles.imagePlaceholder}>
               <MaterialCommunityIcons
-                name="package-variant"
+                name={getCategoryIcon(category) as any}
                 size={28}
                 color={colors.subtext}
               />

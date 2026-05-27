@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   TextInput,
+  Animated,
 } from "react-native";
 import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -71,16 +72,48 @@ export function BarcodeScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [scanState, setScanState] = useState<"idle" | "detected">("idle");
   const isProcessing = useRef(false);
+  const candidateRef = useRef<string | null>(null);
+  const stabilizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [manualInputVisible, setManualInputVisible] = useState(false);
   const [manualBarcode, setManualBarcode] = useState("");
 
+  // Animación de pulso del recuadro al detectar
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (scanState === "detected") {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.04, duration: 300, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1,    duration: 300, useNativeDriver: true }),
+        ])
+      ).start();
+    } else {
+      pulseAnim.stopAnimation();
+      pulseAnim.setValue(1);
+    }
+  }, [scanState]);
+
+  const STABILIZE_MS = 700;
+
+  const resetScanState = useCallback(() => {
+    if (stabilizeTimerRef.current) clearTimeout(stabilizeTimerRef.current);
+    candidateRef.current = null;
+    isProcessing.current = false;
+    setScanned(false);
+    setLoading(false);
+    setScanState("idle");
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
-      isProcessing.current = false;
-      setScanned(false);
-      setLoading(false);
-    }, [])
+      resetScanState();
+      return () => {
+        if (stabilizeTimerRef.current) clearTimeout(stabilizeTimerRef.current);
+      };
+    }, [resetScanState])
   );
 
   // Navega a Products o a ShoppingLists según el modo
@@ -184,11 +217,7 @@ export function BarcodeScanScreen() {
         [
           {
             text: "Cancelar",
-            onPress: () => {
-              isProcessing.current = false;
-              setScanned(false);
-              setLoading(false);
-            },
+            onPress: resetScanState,
             style: "cancel",
           },
           {
@@ -201,17 +230,30 @@ export function BarcodeScanScreen() {
         { cancelable: false }
       );
     } catch (error) {
-      isProcessing.current = false;
       console.error("Error scanning barcode:", error);
-      setScanned(false);
-      setLoading(false);
+      resetScanState();
       Alert.alert("Error", "No se pudo leer el código. Inténtalo de nuevo.");
     }
   };
 
   const handleBarcodeScanned = (event: BarcodeScanningResult) => {
+    if (isProcessing.current || scanned) return;
     const barcode = event.data;
-    handleBarcodeLike(barcode);
+
+    // Si ya estamos esperando para este mismo código, no resetear el timer
+    if (candidateRef.current === barcode) return;
+
+    // Código nuevo o distinto → reiniciar el temporizador de estabilización
+    if (stabilizeTimerRef.current) clearTimeout(stabilizeTimerRef.current);
+    candidateRef.current = barcode;
+    setScanState("detected");
+
+    stabilizeTimerRef.current = setTimeout(() => {
+      if (candidateRef.current === barcode && !isProcessing.current) {
+        setScanState("idle");
+        handleBarcodeLike(barcode);
+      }
+    }, STABILIZE_MS);
   };
 
   const handleManualInput = async () => {
@@ -286,8 +328,20 @@ export function BarcodeScanScreen() {
             {/* Lado izquierdo oscuro */}
             <View style={styles.darkenedArea} />
 
-            {/* Recuadro central verde */}
-            <View style={styles.scanBox} />
+            {/* Recuadro central con esquinas */}
+            <Animated.View style={[styles.scanBox, { transform: [{ scale: pulseAnim }] }]}>
+              {/* Esquinas del visor */}
+              {(["tl", "tr", "bl", "br"] as const).map((pos) => (
+                <View
+                  key={pos}
+                  style={[
+                    styles.corner,
+                    styles[`corner_${pos}`],
+                    { borderColor: scanState === "detected" ? "#F39C12" : colors.primary },
+                  ]}
+                />
+              ))}
+            </Animated.View>
 
             {/* Lado derecho oscuro */}
             <View style={styles.darkenedArea} />
@@ -299,8 +353,11 @@ export function BarcodeScanScreen() {
           {/* Texto debajo del recuadro */}
           <View style={styles.textContainer}>
             <Text style={styles.instructionText}>
-              Apunta al código de barras
+              {scanState === "detected" ? "Mantenlo quieto..." : "Apunta al código de barras"}
             </Text>
+            {scanState === "detected" && (
+              <Text style={styles.instructionSub}>Escaneando en un momento</Text>
+            )}
           </View>
 
           {/* Loading overlay */}
@@ -410,21 +467,59 @@ const styles = StyleSheet.create({
   scanBox: {
     width: 250,
     height: 250,
-    borderWidth: 3,
-    borderColor: colors.primary,
-    borderRadius: borderRadius.lg,
     backgroundColor: "transparent",
+    position: "relative",
+  },
+  // Esquinas del visor (4 rincones)
+  corner: {
+    position: "absolute",
+    width: 32,
+    height: 32,
+  },
+  corner_tl: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+    borderTopLeftRadius: borderRadius.sm,
+  },
+  corner_tr: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 3,
+    borderRightWidth: 3,
+    borderTopRightRadius: borderRadius.sm,
+  },
+  corner_bl: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+    borderBottomLeftRadius: borderRadius.sm,
+  },
+  corner_br: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+    borderBottomRightRadius: borderRadius.sm,
   },
   textContainer: {
     justifyContent: "center",
     alignItems: "center",
     paddingVertical: spacing.lg,
     backgroundColor: "rgba(0, 0, 0, 0.6)",
+    gap: spacing.xs,
   },
   instructionText: {
     ...typography.body,
     color: colors.white,
     fontWeight: "600",
+  },
+  instructionSub: {
+    ...typography.bodySm,
+    color: "#F39C12",
+    fontWeight: "500",
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,

@@ -31,6 +31,7 @@ import {
   deleteItem as deleteItemApi,
   type AddItemData,
   type UpdateItemData,
+  type PantryItem,
 } from "@/api/pantries";
 import { saveProductImage, getProductImage } from "@/services/productImages";
 
@@ -84,7 +85,7 @@ export function ProductsScreen() {
       productName: barcodeData?.name || item?.product.name || "",
       productBrand: barcodeData?.brand || item?.product.brand || "",
       productCategory: barcodeData?.category || item?.product.category || "",
-      quantity: item?.quantity.toString() || "1",
+      quantity: item ? String(Number.isInteger(item.quantity) ? item.quantity : parseFloat(item.quantity.toFixed(2))) : "1",
       unit: item?.unit || "unidades",
       expiryDate: item?.expiry_date
         ? new Date(item.expiry_date)
@@ -225,22 +226,36 @@ export function ProductsScreen() {
         notes: data.notes || undefined,
       };
 
-      let savedProductId: string | undefined;
-
       if (mode === "add") {
         const result = await addItem(pantryId, itemData);
-        savedProductId = result.product?.id ?? result.product_id;
+        const savedProductId = result.product?.id ?? result.product_id;
+        if (localImageUri && savedProductId) {
+          await saveProductImage(savedProductId, localImageUri).catch(() => {});
+        }
+        navigation.goBack();
       } else if (mode === "edit" && itemId) {
-        const result = await updateItem(pantryId, itemId, itemData);
-        savedProductId = result.product?.id ?? result.product_id;
+        await updateItem(pantryId, itemId, itemData);
+        const savedProductId = item?.product?.id;
+        if (localImageUri && savedProductId) {
+          await saveProductImage(savedProductId, localImageUri).catch(() => {});
+        }
+        // Actualización optimista: pasar el item modificado de vuelta a PantriesScreen
+        const optimisticItem: PantryItem = {
+          ...item!,
+          quantity: parseFloat(data.quantity) || 1,
+          unit: data.unit,
+          expiry_date: itemData.expiry_date,
+          location: data.location,
+          notes: data.notes || undefined,
+          product: {
+            ...item!.product,
+            name: data.productName,
+            brand: data.productBrand || undefined,
+            category: data.productCategory || undefined,
+          },
+        };
+        navigation.navigate("Pantries", { _updatedItem: optimisticItem });
       }
-
-      // Guardar imagen local si se eligió una
-      if (localImageUri && savedProductId) {
-        await saveProductImage(savedProductId, localImageUri).catch(() => {});
-      }
-
-      navigation.navigate("Pantries");
     } catch (error: any) {
       console.error("Error saving item:", error);
       const serverErrors = error?.response?.data?.errors;
@@ -271,7 +286,7 @@ export function ProductsScreen() {
             try {
               setLoading(true);
               await deleteItemApi(pantryId, itemId);
-              navigation.navigate("Pantries");
+              navigation.goBack();
             } catch {
               Alert.alert("Error", "No se pudo eliminar el producto");
             } finally {

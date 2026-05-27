@@ -141,6 +141,9 @@ export function LoginScreen() {
                   error={errors.password?.message}
                   style={styles.input}
                 />
+                {!errors.password && (
+                  <Text style={styles.hint}>Mínimo 8 caracteres</Text>
+                )}
               </View>
             )}
           />
@@ -156,9 +159,10 @@ export function LoginScreen() {
         </View>
 
         {/* Botón Iniciar Sesión */}
-        <PrimaryButton 
-          title={loading ? "Entrando..." : "Iniciar sesión"} 
+        <PrimaryButton
+          label="Iniciar sesión"
           onPress={handleSubmit(onSubmit)}
+          loading={loading}
           style={styles.submitButton}
         />
 
@@ -243,6 +247,13 @@ const styles = StyleSheet.create({
     ...typography.bodySm,
     color: colors.error,
     flex: 1,
+  },
+  hint: {
+    ...typography.caption,
+    color: colors.subtext,
+    marginTop: -spacing.sm,
+    marginBottom: spacing.sm,
+    marginLeft: spacing.xs,
   },
   submitButton: {
     marginBottom: spacing.lg,

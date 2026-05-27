@@ -64,6 +64,9 @@ export interface UpdateItemData {
   expiry_date?: string;
   location?: string;
   notes?: string;
+  product_name?: string;
+  product_brand?: string;
+  product_category?: string;
 }
 
 export interface Notification {

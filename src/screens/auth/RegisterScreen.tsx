@@ -224,9 +224,10 @@ export function RegisterScreen() {
         </View>
 
         {/* Botón Crear Cuenta */}
-        <PrimaryButton 
-          title={loading ? "Creando..." : "Crear cuenta"} 
+        <PrimaryButton
+          label="Crear cuenta"
           onPress={handleSubmit(onSubmit)}
+          loading={loading}
           style={styles.submitButton}
         />
 
