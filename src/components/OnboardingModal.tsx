@@ -10,6 +10,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, borderRadius, typography } from "@/config/theme";
@@ -73,8 +74,8 @@ export function OnboardingModal({ visible, onDone, navigation }: Props) {
         {/* Paso 0 — Bienvenida */}
         {step === 0 && (
           <View style={styles.slide}>
-            <MaterialCommunityIcons name="leaf" size={72} color={colors.primary} style={styles.icon} />
-            <Text style={styles.title}>¡Bienvenido a NutriCasa!</Text>
+            <Image source={require("../../assets/icon.png")} style={styles.logo} resizeMode="contain" />
+            <Text style={styles.title}>¡Bienvenido a La Despensa!</Text>
             <Text style={styles.subtitle}>
               Te guiaremos en 2 pasos para que empieces a gestionar tu despensa.
             </Text>
@@ -175,6 +176,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   icon: {
+    marginBottom: spacing.xxl,
+  },
+  logo: {
+    width: 110,
+    height: 110,
     marginBottom: spacing.xxl,
   },
   successIcon: {

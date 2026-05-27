@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { ScrollView, StyleSheet, Text, View, SafeAreaView, Pressable, KeyboardAvoidingView, Platform } from "react-native";
+import { ScrollView, StyleSheet, Text, View, SafeAreaView, Pressable, KeyboardAvoidingView, Platform, Image } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -74,8 +74,8 @@ export function LoginScreen() {
       >
         {/* Logo */}
         <View style={styles.logoSection}>
-          <MaterialCommunityIcons name="leaf" size={48} color={colors.primary} />
-          <Text style={styles.logoText}>NutriCasa</Text>
+          <Image source={require("../../../assets/icon.png")} style={styles.logo} resizeMode="contain" />
+          <Text style={styles.logoText}>La Despensa</Text>
         </View>
 
         {/* Subtítulo */}
@@ -212,6 +212,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: spacing.xxl,
     marginTop: spacing.lg,
+  },
+  logo: {
+    width: 90,
+    height: 90,
   },
   logoText: {
     ...typography.h2,

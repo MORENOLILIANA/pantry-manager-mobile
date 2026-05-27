@@ -313,14 +313,11 @@ export function PantriesScreen() {
   const handleCopyOrShare = async () => {
     if (!shareToken) return;
     const token = shareToken.replace(/^.*\//, "");
-    const shareUrl = `nutricasa://pantry/shared/${token}`;
-    const message = `Únete a mi despensa en NutriCasa 🏠\n\nAbre la app y usa este código de invitación:\n${token}\n\nO si ya tienes la app instalada, toca el enlace:\n${shareUrl}`;
+    const httpsUrl = `https://nutricasa.duckdns.org/join/${token}`;
+    const message = `Te invito a unirte a mi despensa en La Despensa 🏠\n\nToca el enlace para unirte:\n${httpsUrl}`;
     if (Platform.OS === "web") {
-      try { await (globalThis as any).navigator.clipboard.writeText(shareUrl); (globalThis as any).alert("Enlace copiado."); } catch { (globalThis as any).alert(shareUrl); }
-    } else if (Platform.OS === "ios") {
-      await Share.share({ message, url: shareUrl });
+      try { await (globalThis as any).navigator.clipboard.writeText(httpsUrl); (globalThis as any).alert("Enlace copiado."); } catch { (globalThis as any).alert(httpsUrl); }
     } else {
-      // Android: no pasar url por separado para evitar que aparezca duplicado
       await Share.share({ message });
     }
   };
@@ -592,8 +589,8 @@ export function PantriesScreen() {
                 <>
                   <Text style={[styles.modalDesc, { marginBottom: spacing.xs }]}>Código de invitación:</Text>
                   <View style={styles.tokenBox}>
-                    <Text style={[styles.tokenText, { fontSize: 18, fontWeight: "700", letterSpacing: 2 }]} numberOfLines={1}>
-                      {shareToken.replace(/^.*\//, "")}
+                    <Text style={[styles.tokenText, { fontSize: 13 }]} numberOfLines={2}>
+                      {`https://nutricasa.duckdns.org/join/${shareToken.replace(/^.*\//, "")}`}
                     </Text>
                   </View>
                   <Text style={[styles.modalDesc, { marginTop: spacing.sm, marginBottom: spacing.xs }]}>

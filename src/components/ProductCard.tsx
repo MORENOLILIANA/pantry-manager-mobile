@@ -90,24 +90,22 @@ export function ProductCard({
   return (
     <View style={[styles.card, shadows.sm]}>
       <View style={styles.mainRow}>
-        {/* Imagen + días restantes */}
-        <View style={styles.leftCol}>
-          <View style={styles.imageWrap}>
-            {imageUrl ? (
-              <Image source={{ uri: imageUrl }} style={styles.productImage} resizeMode="cover" />
-            ) : (
-              <View style={styles.imagePlaceholder}>
-                <MaterialCommunityIcons
-                  name={getCategoryIcon(category) as any}
-                  size={28}
-                  color={colors.subtext}
-                />
-              </View>
-            )}
-          </View>
+        {/* Imagen con días encima */}
+        <View style={styles.imageWrap}>
+          {imageUrl ? (
+            <Image source={{ uri: imageUrl }} style={styles.productImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.imagePlaceholder}>
+              <MaterialCommunityIcons
+                name={getCategoryIcon(category) as any}
+                size={28}
+                color={colors.subtext}
+              />
+            </View>
+          )}
           {status && expiryDate && (
-            <View style={[styles.daysTag, { backgroundColor: DAY_BG[status] }]}>
-              <Text style={[styles.daysText, { color: DAY_COLOR[status] }]} numberOfLines={1}>
+            <View style={[styles.daysTag, { backgroundColor: DAY_BG[status] + "E6" }]}>
+              <Text style={[styles.daysText, { color: DAY_COLOR[status] }]}>
                 {getExpiryLabel(expiryDate)}
               </Text>
             </View>
@@ -130,26 +128,30 @@ export function ProductCard({
           </View>
 
           <View style={styles.details}>
-            <View style={styles.detailRow}>
-              <MaterialCommunityIcons name="package-variant" size={13} color={colors.subtext} />
-              <Text style={styles.detailText}>{quantity} {unit}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <MaterialCommunityIcons name="calendar" size={13} color={colors.subtext} />
-              <Text style={styles.detailText}>
-                {expiryDate ? formatDate(expiryDate) : "Sin fecha"}
-              </Text>
-            </View>
-            <View style={styles.detailRow}>
-              <MaterialCommunityIcons name="map-marker" size={13} color={colors.subtext} />
-              <Text style={styles.detailText}>{location}</Text>
-            </View>
-            {addedBy ? (
-              <View style={styles.detailRow}>
-                <MaterialCommunityIcons name="account-outline" size={13} color={colors.subtext} />
-                <Text style={styles.detailText}>{addedBy}</Text>
+            <View style={styles.detailsPair}>
+              <View style={styles.detailItem}>
+                <MaterialCommunityIcons name="package-variant" size={13} color={colors.subtext} />
+                <Text style={styles.detailText} numberOfLines={1}>{quantity} {unit}</Text>
               </View>
-            ) : null}
+              <View style={styles.detailItem}>
+                <MaterialCommunityIcons name="map-marker" size={13} color={colors.subtext} />
+                <Text style={styles.detailText} numberOfLines={1}>{location}</Text>
+              </View>
+            </View>
+            <View style={styles.detailsPair}>
+              <View style={styles.detailItem}>
+                <MaterialCommunityIcons name="calendar" size={13} color={colors.subtext} />
+                <Text style={styles.detailText} numberOfLines={1}>
+                  {expiryDate ? formatDate(expiryDate) : "Sin fecha"}
+                </Text>
+              </View>
+              {addedBy ? (
+                <View style={styles.detailItem}>
+                  <MaterialCommunityIcons name="account-outline" size={13} color={colors.subtext} />
+                  <Text style={styles.detailText} numberOfLines={1}>{addedBy}</Text>
+                </View>
+              ) : null}
+            </View>
           </View>
         </View>
       </View>
@@ -169,27 +171,27 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.md,
   },
-  leftCol: {
-    alignItems: "center",
-    gap: spacing.xs,
-    flexShrink: 0,
-  },
   imageWrap: {
     width: IMAGE_SIZE,
     height: IMAGE_SIZE,
     borderRadius: borderRadius.sm,
     overflow: "hidden",
+    flexShrink: 0,
   },
   daysTag: {
-    width: IMAGE_SIZE,
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
     paddingVertical: 3,
-    borderRadius: borderRadius.sm,
+    paddingHorizontal: 2,
     alignItems: "center",
   },
   daysText: {
-    ...typography.caption,
+    fontFamily: undefined,
     fontWeight: "700",
-    fontSize: 11,
+    fontSize: 10,
+    textAlign: "center",
   },
   productImage: {
     width: IMAGE_SIZE,
@@ -234,13 +236,20 @@ const styles = StyleSheet.create({
   details: {
     gap: spacing.xs,
   },
-  detailRow: {
+  detailsPair: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  detailItem: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.xs,
+    minWidth: 0,
   },
   detailText: {
     ...typography.bodySm,
     color: colors.subtext,
+    flexShrink: 1,
   },
 });

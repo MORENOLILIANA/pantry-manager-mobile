@@ -12,7 +12,7 @@ import { colors } from "@/config/theme";
 import { joinSharedPantry } from "@/api/pantries";
 
 const linking: LinkingOptions<RootStackParamList> = {
-  prefixes: ["nutricasa://"],
+  prefixes: ["nutricasa://", "https://nutricasa.duckdns.org"],
   config: {
     screens: {
       Auth: {
@@ -97,8 +97,8 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
         if (params.token) {
           pendingResetRef.current = { token: params.token, email: params.email ?? "" };
         }
-      } else if (url.includes("pantry/shared/")) {
-        const match = url.match(/pantry\/shared\/([^?&/\s]+)/);
+      } else if (url.includes("pantry/shared/") || url.includes("/join/")) {
+        const match = url.match(/pantry\/shared\/([^?&/\s]+)/) ?? url.match(/\/join\/([^?&/\s]+)/);
         if (match?.[1]) pendingJoinRef.current = match[1];
       }
     });
@@ -107,8 +107,8 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
   // Escucha deep links cuando la app ya está en ejecución
   useEffect(() => {
     const sub = Linking.addEventListener("url", ({ url }) => {
-      if (!url.includes("pantry/shared/")) return;
-      const match = url.match(/pantry\/shared\/([^?&/\s]+)/);
+      if (!url.includes("pantry/shared/") && !url.includes("/join/")) return;
+      const match = url.match(/pantry\/shared\/([^?&/\s]+)/) ?? url.match(/\/join\/([^?&/\s]+)/);
       if (!match?.[1]) return;
       const token = match[1];
       if (userRef.current) {

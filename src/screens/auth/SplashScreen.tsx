@@ -1,5 +1,4 @@
-import { StyleSheet, View, Text, ActivityIndicator, SafeAreaView } from "react-native";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { StyleSheet, View, Text, ActivityIndicator, SafeAreaView, Image } from "react-native";
 import { colors, typography, spacing } from "@/config/theme";
 
 export function SplashScreen() {
@@ -7,8 +6,8 @@ export function SplashScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <View style={styles.logoContainer}>
-          <MaterialCommunityIcons name="leaf" size={60} color={colors.primary} />
-          <Text style={styles.logoText}>NutriCasa</Text>
+          <Image source={require("../../../assets/icon.png")} style={styles.logo} resizeMode="contain" />
+          <Text style={styles.logoText}>La Despensa</Text>
         </View>
         <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
       </View>
@@ -30,6 +29,10 @@ const styles = StyleSheet.create({
   logoContainer: {
     alignItems: "center",
     gap: spacing.md,
+  },
+  logo: {
+    width: 130,
+    height: 130,
   },
   logoText: {
     ...typography.h1,
