@@ -171,14 +171,14 @@ export function ProductsScreen() {
     barcodeData?.nutritionalInfo ??
     (item?.product && item.product.calories != null
       ? {
-          calories:      item.product.calories,
-          proteins:      item.product.proteins,
-          carbs:         item.product.carbohydrates,
-          fats:          item.product.fats,
-          saturated_fat: item.product.saturated_fat_per_100g,
-          fiber:         item.product.fiber,
-          sugars:        item.product.sugar,
-          salt:          item.product.salt,
+          calories:      parseFloat(String(item.product.calories)),
+          proteins:      item.product.proteins      != null ? parseFloat(String(item.product.proteins))           : undefined,
+          carbs:         item.product.carbohydrates != null ? parseFloat(String(item.product.carbohydrates))      : undefined,
+          fats:          item.product.fats          != null ? parseFloat(String(item.product.fats))               : undefined,
+          saturated_fat: item.product.saturated_fat_per_100g != null ? parseFloat(String(item.product.saturated_fat_per_100g)) : undefined,
+          fiber:         item.product.fiber         != null ? parseFloat(String(item.product.fiber))              : undefined,
+          sugars:        item.product.sugar         != null ? parseFloat(String(item.product.sugar))              : undefined,
+          salt:          item.product.salt          != null ? parseFloat(String(item.product.salt))               : undefined,
           nutriscore:    item.product.nutriscore ?? undefined,
         }
       : liveNutritional ?? undefined);
