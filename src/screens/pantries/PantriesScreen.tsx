@@ -31,6 +31,7 @@ import {
 } from "@/api/pantries";
 import { requestNotificationPermission, scheduleExpiryNotifications } from "@/services/notificationService";
 import { loadProductImages } from "@/services/productImages";
+import { saveSelectedPantryId } from "@/services/storage";
 
 type Navigation = NativeStackNavigationProp<PantriesStackParamList>;
 type ViewMode = "all" | "location" | "category" | "expiry";
@@ -169,6 +170,7 @@ export function PantriesScreen() {
           : pantries[0].id;
         const fullPantry = await getPantry(targetId);
         selectedPantryIdRef.current = fullPantry.id;
+        saveSelectedPantryId(fullPantry.id).catch(() => {});
         setPantry(fullPantry);
         const items = fullPantry.items || [];
         setAllItems(items);
@@ -190,6 +192,7 @@ export function PantriesScreen() {
       setSwitchingPantry(true);
       const fullPantry = await getPantry(pantryId);
       selectedPantryIdRef.current = fullPantry.id;
+      saveSelectedPantryId(fullPantry.id).catch(() => {});
       setPantry(fullPantry);
       setAllItems(fullPantry.items || []);
       setSearchQuery("");

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import {
   StyleSheet,
   View,
@@ -21,7 +21,7 @@ import { fetchCurrentUser, type AuthUser } from "@/api/auth";
 import { getPantries, getPantry, getNotifications, type Pantry, type Notification } from "@/api/pantries";
 import { getShoppingLists, getShoppingList, type ShoppingList } from "@/api/shoppingLists";
 import { OnboardingModal } from "@/components/OnboardingModal";
-import { getOnboardingDone, setOnboardingDone } from "@/services/storage";
+import { getOnboardingDone, setOnboardingDone, getSelectedPantryId } from "@/services/storage";
 
 function getExpiryLabel(expiryDate: string): string {
   const expiry = new Date(expiryDate);
@@ -71,7 +71,7 @@ export function DashboardScreen() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const initialLoadDone = useRef(false);
 
-  const loadDashboardData = async (silent = false) => {
+  const loadDashboardData = useCallback(async (silent = false) => {
     try {
       if (!silent) setLoading(true);
 
@@ -96,13 +96,16 @@ export function DashboardScreen() {
       let notificationsData: Notification[] = [];
 
       if (pantriesData && pantriesData.length > 0) {
-        const firstPantry = pantriesData[0];
+        const savedId = await getSelectedPantryId();
+        const preferred = savedId && pantriesData.find((p) => p.id === savedId)
+          ? savedId
+          : pantriesData[0].id;
         [pantryData, notificationsData] = await Promise.all([
-          getPantry(firstPantry.id).catch((err) => {
+          getPantry(preferred).catch((err) => {
             console.error("Error fetching pantry:", err);
             return null;
           }),
-          getNotifications(firstPantry.id).catch((err) => {
+          getNotifications(preferred).catch((err) => {
             console.error("Error fetching notifications:", err);
             return [];
           }),
@@ -138,17 +141,17 @@ export function DashboardScreen() {
     } finally {
       if (!silent) setLoading(false);
     }
-  };
+  }, []);
 
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
       if (!initialLoadDone.current) {
         initialLoadDone.current = true;
         loadDashboardData(false);
       } else {
         loadDashboardData(true);
       }
-    }, [])
+    }, [loadDashboardData])
   );
 
   // Calcular métricas

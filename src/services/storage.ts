@@ -102,6 +102,20 @@ export async function toggleRecipeFavoriteId(recipeId: string) {
   return next;
 }
 
+const selectedPantryIdKey = "pantry-manager.selected-pantry-id";
+
+export async function saveSelectedPantryId(id: string): Promise<void> {
+  await AsyncStorage.setItem(selectedPantryIdKey, id);
+}
+
+export async function getSelectedPantryId(): Promise<string | null> {
+  return AsyncStorage.getItem(selectedPantryIdKey);
+}
+
+export async function clearSelectedPantryId(): Promise<void> {
+  await AsyncStorage.removeItem(selectedPantryIdKey);
+}
+
 const onboardingDoneKey = "pantry-manager.onboarding-done";
 
 export async function getOnboardingDone(): Promise<boolean> {
