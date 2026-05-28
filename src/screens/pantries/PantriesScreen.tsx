@@ -165,8 +165,8 @@ export function PantriesScreen() {
       if (pantries && pantries.length > 0) {
         setAllPantries(pantries);
         const targetId =
-          preferredPantryId && pantries.find((p) => p.id === preferredPantryId) ? preferredPantryId
-          : selectedPantryIdRef.current && pantries.find((p) => p.id === selectedPantryIdRef.current) ? selectedPantryIdRef.current!
+          preferredPantryId && pantries.find((p) => String(p.id) === String(preferredPantryId)) ? preferredPantryId
+          : selectedPantryIdRef.current && pantries.find((p) => String(p.id) === String(selectedPantryIdRef.current)) ? selectedPantryIdRef.current!
           : pantries[0].id;
         const fullPantry = await getPantry(targetId);
         selectedPantryIdRef.current = fullPantry.id;
@@ -187,7 +187,7 @@ export function PantriesScreen() {
   };
 
   const switchPantry = async (pantryId: string) => {
-    if (pantryId === selectedPantryIdRef.current || switchingPantry) return;
+    if (String(pantryId) === String(selectedPantryIdRef.current) || switchingPantry) return;
     try {
       setSwitchingPantry(true);
       const fullPantry = await getPantry(pantryId);

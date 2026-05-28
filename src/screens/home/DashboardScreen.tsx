@@ -97,9 +97,9 @@ export function DashboardScreen() {
 
       if (pantriesData && pantriesData.length > 0) {
         const savedId = await getSelectedPantryId();
-        const preferred = savedId && pantriesData.find((p) => p.id === savedId)
+        const preferred = savedId && pantriesData.find((p) => String(p.id) === savedId)
           ? savedId
-          : pantriesData[0].id;
+          : String(pantriesData[0].id);
         [pantryData, notificationsData] = await Promise.all([
           getPantry(preferred).catch((err) => {
             console.error("Error fetching pantry:", err);

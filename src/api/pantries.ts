@@ -198,10 +198,8 @@ export async function getPantryMembers(pantryId: string): Promise<PantryMember[]
   try {
     const response = await apiClient.get<any>(`/pantries/${pantryId}/members`);
     const data = response.data?.data ?? response.data ?? [];
-    console.log("[members] respuesta:", JSON.stringify(data));
     return Array.isArray(data) ? data : [];
-  } catch (err: any) {
-    console.warn("[members] error:", err?.response?.status, err?.response?.data ?? err?.message);
+  } catch {
     return [];
   }
 }

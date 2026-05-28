@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   StyleSheet, View, Text, SafeAreaView, ScrollView,
-  Pressable, Alert, Image, FlatList, Dimensions,
+  Pressable, Alert, Image, FlatList, Dimensions, Modal, ActivityIndicator,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -9,7 +9,7 @@ import type { RouteProp } from "@react-navigation/native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, spacing, borderRadius, typography, shadows } from "@/config/theme";
 import type { PantriesStackParamList } from "@/navigation/stacks/AppStack";
-import { deleteItem as deleteItemApi, updateItem, type PantryItem, type NutritionalInfo } from "@/api/pantries";
+import { deleteItem as deleteItemApi, addItem as addItemApi, updateItem, getPantries, type Pantry, type PantryItem, type NutritionalInfo } from "@/api/pantries";
 import { fetchNutritionalFromOFF } from "@/api/products";
 import { getProductImage } from "@/services/productImages";
 import { calculateNutriscore } from "@/utils/nutriscore";
@@ -75,11 +75,13 @@ function ProductPage({
   pantryId,
   onEdit,
   onDelete,
+  onMove,
 }: {
   item: PantryItem;
   pantryId: string;
   onEdit: () => void;
   onDelete: () => void;
+  onMove?: () => void;
 }) {
   const [imageUri, setImageUri] = useState<string | null>(item.product.image_url || null);
   const [liveNutritional, setLiveNutritional] = useState<NutritionalInfo | null>(null);
@@ -186,6 +188,15 @@ function ProductPage({
           <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.primary} />
           <Text style={styles.actionBtnText}>Editar</Text>
         </Pressable>
+        {onMove && (
+          <>
+            <View style={styles.actionDivider} />
+            <Pressable style={styles.actionBtn} onPress={onMove}>
+              <MaterialCommunityIcons name="folder-move-outline" size={18} color={colors.primary} />
+              <Text style={styles.actionBtnText}>Mover</Text>
+            </Pressable>
+          </>
+        )}
         <View style={styles.actionDivider} />
         <Pressable style={styles.actionBtn} onPress={onDelete}>
           <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.error} />
@@ -284,6 +295,10 @@ export function ProductDetailScreen() {
 
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const flatListRef = useRef<FlatList>(null);
+  const [allPantries, setAllPantries] = useState<Pantry[]>([]);
+  const [moveModalVisible, setMoveModalVisible] = useState(false);
+  const [movingItem, setMovingItem] = useState<PantryItem | null>(null);
+  const [movingToPantryId, setMovingToPantryId] = useState<string | null>(null);
 
   const currentItem = items[currentIndex] ?? items[0];
 
@@ -323,6 +338,60 @@ export function ProductDetailScreen() {
     );
   }, [navigation, pantryId]);
 
+  const handleOpenMove = useCallback(async (item: PantryItem) => {
+    try {
+      const pantries = await getPantries();
+      const others = pantries.filter((p) => p.id !== pantryId);
+      if (others.length === 0) {
+        Alert.alert("Sin otras despensas", "No tienes otras despensas a las que mover este producto.");
+        return;
+      }
+      setAllPantries(others);
+      setMovingItem(item);
+      setMoveModalVisible(true);
+    } catch {
+      Alert.alert("Error", "No se pudieron cargar las despensas.");
+    }
+  }, [pantryId]);
+
+  const handleMoveItem = useCallback(async (targetPantryId: string) => {
+    if (!movingItem) return;
+    try {
+      setMovingToPantryId(targetPantryId);
+      await addItemApi(targetPantryId, {
+        product_id: movingItem.product_id,
+        quantity: movingItem.quantity,
+        unit: movingItem.unit,
+        expiry_date: movingItem.expiry_date,
+        location: movingItem.location,
+        notes: movingItem.notes,
+        product_name: movingItem.product.name,
+        product_brand: movingItem.product.brand,
+        product_category: movingItem.product.category,
+        product_image_url: movingItem.product.image_url,
+        nutritional_info: {
+          calories: movingItem.product.calories,
+          proteins: movingItem.product.proteins,
+          carbs: movingItem.product.carbohydrates,
+          fats: movingItem.product.fats,
+          saturated_fat: movingItem.product.saturated_fat_per_100g,
+          fiber: movingItem.product.fiber,
+          sugars: movingItem.product.sugar,
+          salt: movingItem.product.salt,
+          nutriscore: movingItem.product.nutriscore,
+        },
+      });
+      await deleteItemApi(pantryId, movingItem.id);
+      setMoveModalVisible(false);
+      setMovingItem(null);
+      navigation.goBack();
+    } catch {
+      Alert.alert("Error", "No se pudo mover el producto. Inténtalo de nuevo.");
+    } finally {
+      setMovingToPantryId(null);
+    }
+  }, [movingItem, pantryId, navigation]);
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -356,6 +425,7 @@ export function ProductDetailScreen() {
             pantryId={pantryId}
             onEdit={() => handleEdit(item)}
             onDelete={() => handleDelete(item)}
+            onMove={() => handleOpenMove(item)}
           />
         )}
       />
@@ -371,6 +441,42 @@ export function ProductDetailScreen() {
           }
         </View>
       )}
+
+      {/* Modal mover producto */}
+      <Modal visible={moveModalVisible} transparent animationType="fade" onRequestClose={() => { if (!movingToPantryId) { setMoveModalVisible(false); setMovingItem(null); } }}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => { if (!movingToPantryId) { setMoveModalVisible(false); setMovingItem(null); } }} />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Mover producto</Text>
+            {movingItem && (
+              <Text style={styles.modalDesc}>
+                ¿A qué despensa quieres mover{" "}
+                <Text style={{ fontWeight: "700", color: colors.text }}>{movingItem.product.name}</Text>?
+              </Text>
+            )}
+            {allPantries.map((p) => (
+              <Pressable
+                key={p.id}
+                onPress={() => handleMoveItem(p.id)}
+                disabled={movingToPantryId !== null}
+                style={[styles.movePantryRow, movingToPantryId !== null && { opacity: 0.5 }]}
+              >
+                <View style={styles.movePantryIcon}>
+                  <MaterialCommunityIcons name="package-variant" size={18} color={colors.primary} />
+                </View>
+                <Text style={styles.movePantryName}>{p.name}</Text>
+                {movingToPantryId === p.id
+                  ? <ActivityIndicator size="small" color={colors.primary} />
+                  : <MaterialCommunityIcons name="chevron-right" size={20} color={colors.subtext} />
+                }
+              </Pressable>
+            ))}
+            <Pressable onPress={() => { setMoveModalVisible(false); setMovingItem(null); }} disabled={movingToPantryId !== null} style={styles.modalClose}>
+              <Text style={styles.modalCloseText}>Cancelar</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -480,4 +586,14 @@ const styles = StyleSheet.create({
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.border },
   dotActive: { width: 18, backgroundColor: colors.primary },
   pageCounter: { ...typography.bodySm, color: colors.subtext, fontWeight: "600" },
+  modalOverlay: { flex: 1, justifyContent: "center", alignItems: "center" },
+  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.5)" },
+  modalCard: { backgroundColor: colors.white, borderRadius: borderRadius.lg, padding: spacing.lg, width: "88%", maxWidth: 420 },
+  modalTitle: { ...typography.h2, color: colors.text, textAlign: "center", marginBottom: spacing.lg },
+  modalDesc: { ...typography.bodySm, color: colors.subtext, marginBottom: spacing.md },
+  movePantryRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
+  movePantryIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.secondary, alignItems: "center", justifyContent: "center" },
+  movePantryName: { ...typography.body, color: colors.text, fontWeight: "600", flex: 1 },
+  modalClose: { marginTop: spacing.lg, alignItems: "center" },
+  modalCloseText: { ...typography.bodySm, color: colors.subtext, fontWeight: "600" },
 });
