@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { ScrollView, StyleSheet, Text, View, SafeAreaView, Pressable, KeyboardAvoidingView, Platform } from "react-native";
+import { AppState, ScrollView, StyleSheet, Text, View, SafeAreaView, Pressable, KeyboardAvoidingView, Platform } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -27,19 +27,44 @@ export function ForgotPasswordScreen() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cooldownEndRef = useRef<number>(0);
   const lastEmailRef = useRef<string>("");
 
   useEffect(() => {
     return () => { if (cooldownRef.current) clearInterval(cooldownRef.current); };
   }, []);
 
+  // Recalcula el tiempo restante cuando la app vuelve al primer plano
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active" || cooldownEndRef.current === 0) return;
+      const remaining = Math.ceil((cooldownEndRef.current - Date.now()) / 1000);
+      if (remaining <= 0) {
+        if (cooldownRef.current) clearInterval(cooldownRef.current);
+        cooldownRef.current = null;
+        cooldownEndRef.current = 0;
+        setResendCooldown(0);
+      } else {
+        setResendCooldown(remaining);
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
   function startCooldown() {
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
+    cooldownEndRef.current = Date.now() + 60 * 1000;
     setResendCooldown(60);
     cooldownRef.current = setInterval(() => {
-      setResendCooldown((prev) => {
-        if (prev <= 1) { clearInterval(cooldownRef.current!); return 0; }
-        return prev - 1;
-      });
+      const remaining = Math.ceil((cooldownEndRef.current - Date.now()) / 1000);
+      if (remaining <= 0) {
+        clearInterval(cooldownRef.current!);
+        cooldownRef.current = null;
+        cooldownEndRef.current = 0;
+        setResendCooldown(0);
+      } else {
+        setResendCooldown(remaining);
+      }
     }, 1000);
   }
 

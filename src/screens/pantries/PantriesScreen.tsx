@@ -25,7 +25,8 @@ import { ProductCard } from "@/components/ProductCard";
 import { EmptyState } from "@/components/EmptyState";
 import {
   getPantries, getPantry, createPantry,
-  deleteItem as deleteItemApi, sharePantry, joinSharedPantry, getPantryMembers,
+  addItem as addItemApi, deleteItem as deleteItemApi,
+  sharePantry, joinSharedPantry, getPantryMembers,
   type Pantry, type PantryItem, type PantryMember,
 } from "@/api/pantries";
 import { requestNotificationPermission, scheduleExpiryNotifications } from "@/services/notificationService";
@@ -150,6 +151,9 @@ export function PantriesScreen() {
   const [joinLoading,       setJoinLoading]       = useState(false);
   const [joinError,         setJoinError]         = useState<string | null>(null);
   const [joinModalVisible,  setJoinModalVisible]  = useState(false);
+  const [moveModalVisible,  setMoveModalVisible]  = useState(false);
+  const [movingItem,        setMovingItem]        = useState<PantryItem | null>(null);
+  const [movingToPantryId,  setMovingToPantryId]  = useState<string | null>(null);
 
   // ── Data loading ──────────────────────────────────────────────────────────
 
@@ -349,6 +353,44 @@ export function PantriesScreen() {
   const handleEditItem = (item: PantryItem) => {
     if (!pantry) return;
     navigation.navigate("Products", { pantryId: pantry.id, itemId: item.id, mode: "edit", item });
+  };
+
+  const handleMoveItem = async (targetPantryId: string) => {
+    if (!movingItem || !pantry) return;
+    try {
+      setMovingToPantryId(targetPantryId);
+      await addItemApi(targetPantryId, {
+        product_id: movingItem.product_id,
+        quantity: movingItem.quantity,
+        unit: movingItem.unit,
+        expiry_date: movingItem.expiry_date,
+        location: movingItem.location,
+        notes: movingItem.notes,
+        product_name: movingItem.product.name,
+        product_brand: movingItem.product.brand,
+        product_category: movingItem.product.category,
+        product_image_url: movingItem.product.image_url,
+        nutritional_info: {
+          calories: movingItem.product.calories,
+          proteins: movingItem.product.proteins,
+          carbs: movingItem.product.carbohydrates,
+          fats: movingItem.product.fats,
+          saturated_fat: movingItem.product.saturated_fat_per_100g,
+          fiber: movingItem.product.fiber,
+          sugars: movingItem.product.sugar,
+          salt: movingItem.product.salt,
+          nutriscore: movingItem.product.nutriscore,
+        },
+      });
+      await deleteItemApi(pantry.id, movingItem.id);
+      setAllItems((prev) => prev.filter((i) => i.id !== movingItem.id));
+      setMoveModalVisible(false);
+      setMovingItem(null);
+    } catch {
+      Alert.alert("Error", "No se pudo mover el producto. Inténtalo de nuevo.");
+    } finally {
+      setMovingToPantryId(null);
+    }
   };
 
   const handleAddItem = () => {
@@ -566,6 +608,7 @@ export function PantriesScreen() {
                 status={getExpiryStatus(entry.item.expiry_date)}
                 imageUrl={localImages[entry.item.product.id] || entry.item.product.image_url}
                 addedBy={entry.item.added_by?.name}
+                onMove={allPantries.length > 1 ? () => { setMovingItem(entry.item); setMoveModalVisible(true); } : undefined}
                 onPress={() => {
                   const visibleItems = (listData as FlatEntry[])
                     .filter((e): e is { _type: "item"; key: string; item: PantryItem } => e._type === "item")
@@ -659,6 +702,42 @@ export function PantriesScreen() {
             <Pressable onPress={() => setCreateModalVisible(false)} style={styles.modalClose}><Text style={styles.modalCloseText}>Cancelar</Text></Pressable>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Modal mover producto */}
+      <Modal visible={moveModalVisible} transparent animationType="fade" onRequestClose={() => { if (!movingToPantryId) { setMoveModalVisible(false); setMovingItem(null); } }}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => { if (!movingToPantryId) { setMoveModalVisible(false); setMovingItem(null); } }} />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Mover producto</Text>
+            {movingItem && (
+              <Text style={styles.modalDesc}>
+                ¿A qué despensa quieres mover{" "}
+                <Text style={{ fontWeight: "700", color: colors.text }}>{movingItem.product.name}</Text>?
+              </Text>
+            )}
+            {allPantries.filter((p) => p.id !== pantry?.id).map((p) => (
+              <Pressable
+                key={p.id}
+                onPress={() => handleMoveItem(p.id)}
+                disabled={movingToPantryId !== null}
+                style={[styles.movePantryRow, movingToPantryId !== null && { opacity: 0.5 }]}
+              >
+                <View style={styles.movePantryIcon}>
+                  <MaterialCommunityIcons name="package-variant" size={18} color={colors.primary} />
+                </View>
+                <Text style={styles.movePantryName}>{p.name}</Text>
+                {movingToPantryId === p.id
+                  ? <ActivityIndicator size="small" color={colors.primary} />
+                  : <MaterialCommunityIcons name="chevron-right" size={20} color={colors.subtext} />
+                }
+              </Pressable>
+            ))}
+            <Pressable onPress={() => { setMoveModalVisible(false); setMovingItem(null); }} disabled={movingToPantryId !== null} style={styles.modalClose}>
+              <Text style={styles.modalCloseText}>Cancelar</Text>
+            </Pressable>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -765,4 +844,7 @@ const styles = StyleSheet.create({
   pantryChipNew: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.primary, borderStyle: "dashed", backgroundColor: colors.white },
   pantryChipText: { ...typography.bodySm, color: colors.primary, fontWeight: "600" },
   pantryChipTextActive: { color: colors.white },
+  movePantryRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
+  movePantryIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.secondary, alignItems: "center", justifyContent: "center" },
+  movePantryName: { ...typography.body, color: colors.text, fontWeight: "600", flex: 1 },
 });

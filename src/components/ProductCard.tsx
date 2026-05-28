@@ -39,6 +39,7 @@ type Props = {
   onPress?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onMove?: () => void;
 };
 
 function getExpiryLabel(expiryDate: string): string {
@@ -68,6 +69,7 @@ export function ProductCard({
   onPress,
   onEdit,
   onDelete,
+  onMove,
 }: Props) {
   const formatDate = (date: string) => {
     try {
@@ -84,6 +86,7 @@ export function ProductCard({
   const handleMenu = () => {
     const options: any[] = [];
     if (onEdit) options.push({ text: "Editar", onPress: onEdit });
+    if (onMove) options.push({ text: "Mover a otra despensa", onPress: onMove });
     if (onDelete) options.push({ text: "Eliminar", style: "destructive", onPress: onDelete });
     options.push({ text: "Cancelar", style: "cancel" });
     Alert.alert(name, undefined, options);
@@ -122,7 +125,7 @@ export function ProductCard({
               {brand ? <Text style={styles.brand} numberOfLines={1}>{brand}</Text> : null}
             </View>
 
-            {(onEdit || onDelete) && (
+            {(onEdit || onDelete || onMove) && (
               <Pressable onPress={handleMenu} style={styles.menuBtn} hitSlop={8}>
                 <MaterialCommunityIcons name="dots-vertical" size={22} color={colors.subtext} />
               </Pressable>

@@ -107,6 +107,23 @@ function AppContent({ navigationRef }: { navigationRef: any }) {
   // Escucha deep links cuando la app ya está en ejecución
   useEffect(() => {
     const sub = Linking.addEventListener("url", ({ url }) => {
+      if (url.includes("reset-password")) {
+        if (userRef.current) return; // ya logueado, no tiene sentido resetear
+        const qIdx = url.indexOf("?");
+        if (qIdx === -1) return;
+        const params: Record<string, string> = {};
+        url.slice(qIdx + 1).split("&").forEach((p) => {
+          const eqIdx = p.indexOf("=");
+          if (eqIdx > 0) params[p.slice(0, eqIdx)] = decodeURIComponent(p.slice(eqIdx + 1));
+        });
+        if (params.token && navigationRef.isReady()) {
+          navigationRef.navigate("Auth", {
+            screen: "ResetPassword",
+            params: { token: params.token, email: params.email ?? "" },
+          } as any);
+        }
+        return;
+      }
       if (!url.includes("pantry/shared/") && !url.includes("/join/")) return;
       const match = url.match(/pantry\/shared\/([^?&/\s]+)/) ?? url.match(/\/join\/([^?&/\s]+)/);
       if (!match?.[1]) return;
